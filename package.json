@@ -1,0 +1,16 @@
+{
+  "name": "pulse",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PULSE — concurrent incident command swarm on Mozaik",
+  "scripts": {
+    "replay": "node --experimental-strip-types src/server.ts --mode replay",
+    "live": "node --experimental-strip-types src/server.ts --mode live",
+    "dev": "node --experimental-strip-types src/server.ts --mode replay",
+    "test": "node --experimental-strip-types src/veto.test.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

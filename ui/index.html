@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PULSE — incident command</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">PULSE</div>
+      <div id="incident">no incident</div>
+      <div id="sev" class="sev">—</div>
+      <div id="clock" class="clock">00:00.0</div>
+      <div id="pills" class="pills"></div>
+      <div class="tagline">The dangerous command dies before it finishes being written.</div>
+    </header>
+    <main class="grid">
+      <section class="col">
+        <h2>Roster</h2>
+        <div id="roster"></div>
+      </section>
+      <section class="col">
+        <h2>Fixer stream</h2>
+        <div id="fixer" class="stream"></div>
+      </section>
+      <section class="col">
+        <h2>RedTeam / veto</h2>
+        <div id="redteam" class="stream"></div>
+      </section>
+      <section class="col">
+        <h2>Evidence + hypotheses</h2>
+        <div id="side"></div>
+      </section>
+    </main>
+    <div class="cmd">
+      <button id="replay">Replay fixture</button>
+      <button id="join">Join as commander</button>
+      <button id="leave">Leave</button>
+      <input id="cmd" placeholder="Human directive — wired in live mode" />
+    </div>
+    <div class="bottom">
+      <div id="status">connecting…</div>
+    </div>
+    <div id="gantt" class="gantt"></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

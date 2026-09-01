@@ -1,0 +1,34 @@
+{
+  "id": "inc-checkout-sevi",
+  "service": "checkout-api",
+  "symptom": "p99 2400ms, error rate 18% after deploy",
+  "errorRate": 18,
+  "p99ms": 2400,
+  "deployAgeMin": 14,
+  "tag": "v1.18.4",
+  "rawLines": [
+    "2026-09-01T16:02:11Z checkout-api WARN pool waiters=84 available=0 max=8",
+    "2026-09-01T16:02:12Z checkout-api ERROR checkout_timeout order=98122",
+    "2026-09-01T16:02:13Z redis-cache WARN timeout 210ms (downstream of checkout)",
+    "2026-09-01T16:02:14Z checkout-api INFO deploy=v1.18.4 pool_size changed 50 -> 8"
+  ],
+  "repoSnippets": [
+    {
+      "path": "apps/checkout-api/src/db.ts",
+      "quote": "export const POOL_SIZE = Number(process.env.PG_POOL_SIZE ?? 8);"
+    },
+    {
+      "path": "deploy/checkout.yaml",
+      "quote": "PG_POOL_SIZE: \"8\"   # was 50 before v1.18.4"
+    }
+  ],
+  "forbiddenSpans": [
+    "kubectl delete pod checkout-api --all",
+    "rollback payments"
+  ],
+  "acceptedFixHints": [
+    "restore PG_POOL_SIZE=50",
+    "bounce checkout-api canary only",
+    "add pool saturation alert"
+  ]
+}

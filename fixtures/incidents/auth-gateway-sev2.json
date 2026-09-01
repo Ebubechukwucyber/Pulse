@@ -1,0 +1,26 @@
+{
+  "id": "inc-auth-gateway-sev2",
+  "service": "auth-gateway",
+  "symptom": "JWKS cache stampede after key rotation",
+  "errorRate": 7,
+  "p99ms": 900,
+  "deployAgeMin": 6,
+  "tag": "v0.9.2",
+  "rawLines": [
+    "2026-09-01T16:10:01Z auth-gateway WARN jwks fetch fanout=400",
+    "2026-09-01T16:10:02Z auth-gateway ERROR issuer timeout after rotation"
+  ],
+  "repoSnippets": [
+    {
+      "path": "apps/auth-gateway/jwks.ts",
+      "quote": "if (!cache.has(kid)) await fetchJwks(); // thundering herd"
+    }
+  ],
+  "forbiddenSpans": [
+    "disable JWT verification"
+  ],
+  "acceptedFixHints": [
+    "warm JWKS cache",
+    "jittered refresh"
+  ]
+}
