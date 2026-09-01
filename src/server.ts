@@ -47,6 +47,68 @@ const httpServer = createServer((req, res) => {
     return;
   }
 
+  if (url === "/api/join" && req.method === "POST") {
+    bus.emit({
+      id: crypto.randomUUID(),
+      t_ms: Date.now(),
+      type: "RosterChanged",
+      from: "commander",
+      to: "broadcast",
+      payload: { joined: ["commander"], left: [], reason: "human commander joined" },
+    });
+    res.writeHead(202).end("joined");
+    return;
+  }
+
+  if (url === "/api/leave" && req.method === "POST") {
+    bus.emit({
+      id: crypto.randomUUID(),
+      t_ms: Date.now(),
+      type: "RosterChanged",
+      from: "commander",
+      to: "broadcast",
+      payload: { joined: [], left: ["commander"], reason: "human commander left" },
+    });
+    bus.emit({
+      id: crypto.randomUUID(),
+      t_ms: Date.now(),
+      type: "ParticipantLeftWork",
+      from: "commander",
+      to: "broadcast",
+      payload: { who: "commander", openTasks: [], reassignedTo: "fixer" },
+    });
+    res.writeHead(202).end("left");
+    return;
+  }
+
+  if (url === "/api/directive" && req.method === "POST") {
+    let raw = "";
+    req.on("data", (c) => {
+      raw += c;
+    });
+    req.on("end", () => {
+      let text = "";
+      try {
+        text = JSON.parse(raw).text ?? "";
+      } catch {
+        text = raw;
+      }
+      text = String(text).slice(0, 200);
+      if (text) {
+        bus.emit({
+          id: crypto.randomUUID(),
+          t_ms: Date.now(),
+          type: "HumanDirective",
+          from: "commander",
+          to: "broadcast",
+          payload: { text },
+        });
+      }
+      res.writeHead(202).end("ok");
+    });
+    return;
+  }
+
   let path = url === "/" ? "/index.html" : url.split("?")[0];
   const file = join(ui, path.replace(/^\//, ""));
   if (!file.startsWith(ui) || !existsSync(file)) {

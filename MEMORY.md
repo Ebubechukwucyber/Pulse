@@ -5,7 +5,26 @@ After your session, append a new dated block at the top (newest first). Do not d
 
 ---
 
-## Current head — 2026-09-01 21:45 WAT
+## Current head — 2026-09-01 22:05 WAT
+
+### UI win pass
+Replaced war-room surface (`ui/index.html`, `ui/styles.css`, `ui/app.js`).
+
+Now on the wall, from real bus events only:
+- Incident brief + error/p99/deploy/clock from `IncidentDeclared` / `SeveritySet`
+- Agent hot ticks (400ms)
+- Fixer draft with **only the veto span** struck through (`atChar` + `dangerousSpan`)
+- Kill-cam replays local log from t-3s to t+1.5s around `VetoIssued`
+- Swimlane merges nearby stamps into blocks so overlap is visible
+- Keys: R replay, K kill-cam
+
+Not invented: no fake metrics, no extra agents.
+
+User already pushed an earlier commit to GitHub. This UI pass is **local until they commit**.
+
+---
+
+## Previous head — 2026-09-01 21:45 WAT
 
 ### Goal of this session
 Stand up the PULSE repo so two non-developers (or another LLM) can continue without inventing architecture.
