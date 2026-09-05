@@ -82,6 +82,78 @@
       <button type="button" id="send">Send</button>
       <span id="status">connecting</span>
     </footer>
+    <script>
+      (function paintLive() {
+        function set(id, text) {
+          var el = document.getElementById(id);
+          if (el && text) el.textContent = text;
+        }
+        function pull() {
+          fetch("/api/snapshot")
+            .then(function (r) { return r.json(); })
+            .then(function (events) {
+              if (!events || !events.length) return;
+              set("status", "snapshot " + events.length + " events");
+              events.forEach(function (ev) {
+                var p = ev.payload || {};
+                if (ev.type === "IncidentDeclared") {
+                  set("service", p.service);
+                  set("brief", p.symptom);
+                  set("m-err", p.errorRate + "%");
+                  set("m-p99", p.p99ms + "ms");
+                  set("m-dep", p.deployAgeMin + "m");
+                  set("sentry", [p.service, p.symptom].concat(p.rawLines || []).join("\n"));
+                }
+                if (ev.type === "SeveritySet") {
+                  set("sev", p.sev);
+                  var sev = document.getElementById("sev");
+                  if (sev) sev.className = "sev " + p.sev;
+                  set("brief", p.reason);
+                  set("triage", p.sev + "\n" + p.reason);
+                }
+                if (ev.type === "EvidenceFound") set("arch", p.quote);
+                if (ev.type === "HypothesisPosted") set("hyp", p.claim || p.title);
+                if (ev.type === "FixDraftDelta" || ev.type === "FixDraftFinal") {
+                  if (p.draftId === "draft-2") {
+                    window.__pulseSafe = p.fullSoFar || p.text || window.__pulseSafe;
+                  } else {
+                    window.__pulseDraft = p.fullSoFar || p.text || window.__pulseDraft;
+                  }
+                }
+                if (ev.type === "VetoIssued") {
+                  window.__pulseVeto = p;
+                  set("red-draft", (p.reason || "") + "\n" + (p.dangerousSpan || ""));
+                }
+              });
+              var draft = window.__pulseDraft || "";
+              var veto = window.__pulseVeto;
+              var box = document.getElementById("fixer");
+              if (box && draft) {
+                if (veto && veto.dangerousSpan && draft.indexOf(veto.dangerousSpan) >= 0) {
+                  var at = typeof veto.atChar === "number" ? veto.atChar : draft.indexOf(veto.dangerousSpan);
+                  var end = at + String(veto.dangerousSpan).length;
+                  function esc(s) {
+                    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+                  }
+                  box.innerHTML = esc(draft.slice(0, at)) + "<mark>" + esc(draft.slice(at, end)) + "</mark>" + esc(draft.slice(end));
+                } else {
+                  box.textContent = draft;
+                }
+              }
+              if (window.__pulseSafe) {
+                var red = document.getElementById("red-draft");
+                var vetoLine = window.__pulseVeto
+                  ? (window.__pulseVeto.reason || "") + "\n" + (window.__pulseVeto.dangerousSpan || "")
+                  : "";
+                if (red) red.textContent = vetoLine + "\n\nnext: " + window.__pulseSafe;
+              }
+            })
+            .catch(function () {});
+        }
+        pull();
+        setInterval(pull, 1000);
+      })();
+    </script>
     <script src="/app.js"></script>
   </body>
 </html>

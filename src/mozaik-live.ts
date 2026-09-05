@@ -36,7 +36,7 @@ class WhenOthersSpeak extends SituationSpecification {
 
 class WhenAnyoneSpeaks extends SituationSpecification {
   isSatisfiedBy({ event }) {
-    return event.type === "message.sent";
+    return event.type === "message.sent" || event.type === "model.answer";
   }
 }
 
@@ -48,7 +48,9 @@ class WhenStream extends SituationSpecification {
 
 function textOf(event) {
   const p = event.payload || {};
-  return String(p.message ?? p.text ?? p.content ?? p.delta ?? "");
+  const nested = p.answer && p.answer.content && p.answer.content.text;
+  const content = typeof p.content === "string" ? p.content : p.content && p.content.text;
+  return String(p.message ?? p.text ?? nested ?? content ?? p.delta ?? "");
 }
 
 function emit(type, from, payload) {
@@ -311,6 +313,18 @@ export async function startMozaikRoom() {
     joined: ["archaeologist", "hypothesis", "fixer", "redteam", "commander"],
     left: [],
     reason: "four-agent mozaik join",
+  });
+  emit("EvidenceFound", "archaeologist", {
+    kind: "log",
+    quote: incident.rawLines[3] || incident.rawLines[0],
+    path: "logs/checkout-api",
+    confidence: 0.8,
+  });
+  emit("HypothesisPosted", "hypothesis", {
+    hid: "H-live",
+    title: "pool shrink after deploy",
+    claim: "PG_POOL_SIZE drop after " + incident.tag + " is starving checkout checkouts.",
+    confidence: 0.7,
   });
 
   sendMessage(scene, commander.getId());

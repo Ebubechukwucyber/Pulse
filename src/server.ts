@@ -32,6 +32,12 @@ const httpServer = createServer((req, res) => {
     return;
   }
 
+  if (url === "/api/snapshot") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(bus.log));
+    return;
+  }
+
   if (url === "/events") {
     res.writeHead(200, {
       "content-type": "text/event-stream",
@@ -149,14 +155,21 @@ process.on("unhandledRejection", (err) => {
   console.log("live loop warning:", String(err?.message ?? err));
 });
 
-httpServer.listen(port, () => {
-  console.log(`PULSE ${mode}  http://localhost:${port}`);
+async function boot() {
   if (mode === "live") {
-    void startPreferredLive();
-  } else {
-    void playCheckoutDemo();
+    await startPreferredLive();
   }
-});
+  httpServer.listen(port, () => {
+    console.log(`PULSE ${mode}  http://localhost:${port}`);
+    if (mode !== "live") {
+      void playCheckoutDemo();
+    } else {
+      console.log("live room already on the bus. open http://localhost:" + port);
+    }
+  });
+}
+
+void boot();
 
 async function startPreferredLive() {
   try {

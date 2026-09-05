@@ -31,6 +31,7 @@ const roster = new Set(["sentry", "triage"]);
 const lastSeen = {};
 const stamps = {};
 const factsSeen = new Set();
+const seenIds = new Set();
 let origin = 0;
 let log = [];
 let fixerText = "";
@@ -136,6 +137,9 @@ function addFact(key, title, body) {
 }
 
 function apply(ev, record) {
+  if (!ev || !ev.type) return;
+  if (ev.id && seenIds.has(ev.id)) return;
+  if (ev.id) seenIds.add(ev.id);
   if (record) log.push(ev);
   if (!origin) origin = Date.now() - (ev.t_ms || 0);
 
@@ -149,15 +153,15 @@ function apply(ev, record) {
   ui.status.textContent = `${fmt(ev.t_ms || 0)}  ${ev.type} ← ${from}`;
 
   if (ev.type === "IncidentDeclared") {
-    const p = ev.payload;
-    ui.service.textContent = p.service;
-    ui.brief.textContent = p.symptom;
-    ui.err.textContent = `${p.errorRate}%`;
-    ui.p99.textContent = `${p.p99ms}ms`;
-    ui.dep.textContent = `${p.deployAgeMin}m`;
+    const p = ev.payload || {};
+    if (ui.service) ui.service.textContent = p.service;
+    if (ui.brief) ui.brief.textContent = p.symptom;
+    if (ui.err) ui.err.textContent = `${p.errorRate}%`;
+    if (ui.p99) ui.p99.textContent = `${p.p99ms}ms`;
+    if (ui.dep) ui.dep.textContent = `${p.deployAgeMin}m`;
     if (ui.sentry) {
       ui.sentry.textContent = [p.service, p.symptom, ...(p.rawLines || [])].join("\n");
-      ui.sentryState.textContent = "firing";
+      if (ui.sentryState) ui.sentryState.textContent = "firing";
     }
   }
   if (ev.type === "SeveritySet") {
@@ -204,9 +208,13 @@ function apply(ev, record) {
     }
   }
   if (ev.type === "FixDraftDelta") {
-    fixerText = ev.payload.fullSoFar;
-    paintFixer();
-    ui.fixerState.textContent = ev.payload.draftId === "draft-2" ? "pivot" : "streaming";
+    if (veto && ev.payload.draftId === "draft-2") {
+      ui.fixerState.textContent = "pivot";
+    } else {
+      fixerText = ev.payload.fullSoFar;
+      paintFixer();
+      ui.fixerState.textContent = ev.payload.draftId === "draft-2" ? "pivot" : "streaming";
+    }
   }
   if (ev.type === "VetoIssued") {
     veto = ev.payload;
@@ -245,6 +253,7 @@ function resetView() {
   veto = null;
   fixerText = "";
   factsSeen.clear();
+  seenIds.clear();
   log = [];
   Object.keys(stamps).forEach((k) => delete stamps[k]);
   Object.keys(lastSeen).forEach((k) => delete lastSeen[k]);
@@ -271,20 +280,46 @@ function resetView() {
   killCamTimer.forEach(clearTimeout);
   killCamTimer = [];
   playing = true;
+  window.__pulseDraft = "";
+  window.__pulseVeto = null;
+}
+
+function ingest(events) {
+  if (!Array.isArray(events)) return;
+  for (const ev of events) {
+    try {
+      apply(ev, true);
+    } catch (err) {}
+  }
+}
+
+function pullSnapshot() {
+  return fetch("/api/snapshot")
+    .then((r) => r.json())
+    .then((events) => {
+      ingest(events);
+      if (ui.status && events.length) {
+        ui.status.textContent = "snapshot " + events.length + " events";
+      }
+    })
+    .catch(() => {});
 }
 
 function connect() {
-  const es = new EventSource("/events");
-  es.onopen = () => {
-    ui.status.textContent = "bus connected";
-  };
-  es.onmessage = (m) => {
+  pullSnapshot();
+  setInterval(pullSnapshot, 1500);
+  const onBus = (m) => {
     try {
       if (playing) apply(JSON.parse(m.data), true);
-    } catch (e) {}
+    } catch (err) {}
+  };
+  const es = new EventSource("/events");
+  es.onmessage = onBus;
+  es.onopen = () => {
+    pullSnapshot();
   };
   es.onerror = () => {
-    ui.status.textContent = "reconnecting";
+    if (ui.status) ui.status.textContent = "reconnecting";
   };
 }
 
