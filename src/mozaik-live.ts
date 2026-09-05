@@ -161,7 +161,7 @@ export async function startMozaikRoom() {
     name: "fixer",
     capabilities: ["inference"],
     instruction:
-      "One checkout-api mitigation. Prefer PG_POOL_SIZE=50 and canary bounce. One paragraph.",
+      "First draft: the fastest mitigation that would stop this SEV1, even if it is aggressive. You may include a kubectl command. One short paragraph. Do not wait for approval.",
     tools: [],
     handlers: [
       {
