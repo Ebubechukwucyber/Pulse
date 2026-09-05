@@ -139,16 +139,9 @@ No wait between those calls. Each emits `LoopStarted` with `t_ms`.
 
 ## Mozaik cloud
 
-Official weekend viewer. One command, no extra product code:
+This is the runtime evidence, not a mock. After `npx @mozaik-ai/cloud-sdk pair` and `npm run live`, [Mozaik cloud](https://app.jigjoy.ai/) shows three agents on **one SEV1**: archaeologist, hypothesis, fixer. Each has **1 loop**. Memory holds the same checkout incident (p99, deploy `v1.18.4`) plus that agent's own answer.
 
-```bash
-npx @mozaik-ai/cloud-sdk pair
-npm run live
-```
-
-Approve the browser prompt. `@mozaik-ai/core` 4.x events go to [Mozaik cloud](https://app.jigjoy.ai/).
-
-After a live run a reviewer should see three agents, **1 loop each**, same SEV1 in memory.
+That is concurrent work: three `runLoop`s, not a queue of screenshots.
 
 ### Archaeologist
 
@@ -162,27 +155,7 @@ After a live run a reviewer should see three agents, **1 loop each**, same SEV1 
 
 ![Fixer on Mozaik cloud](assets/mozaik-cloud-fixer.png)
 
-Each **details** tab should show instruction, the user SEV1, and the assistant answer. Open **loops** if you want timings.
-
-RedTeam does not need its own loop unless a pivot `runLoop` fires. Pair is **not** a model key.
-
-**How to save the three images**
-
-1. `npm run live` until cloud shows **LIVE**.
-2. Left sidebar **Agents** → click **archaeologist** → **details**.
-3. `Win+Shift+S`, save as `assets/mozaik-cloud-archaeologist.png`.
-4. Click **hypothesis** → **details** → save `assets/mozaik-cloud-hypothesis.png`.
-5. Click **fixer** → **details** → save `assets/mozaik-cloud-fixer.png`.
-
-Exact paths:
-
-```
-C:\Users\Ebubechukwu\Documents\pulse\assets\mozaik-cloud-archaeologist.png
-C:\Users\Ebubechukwu\Documents\pulse\assets\mozaik-cloud-hypothesis.png
-C:\Users\Ebubechukwu\Documents\pulse\assets\mozaik-cloud-fixer.png
-```
-
-Do not capture API keys, `.env`, or Billing. Commit all three PNGs with the README.
+Pair is telemetry. A model key is still required for tokens. RedTeam is on the runtime and does not need its own loop unless a pivot runs.
 
 ---
 
