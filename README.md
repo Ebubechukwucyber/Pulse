@@ -17,9 +17,10 @@ Built for **JigJoy × daily.dev × Hyperskill — Build Systems of Concurrent Ag
 5. [The veto](#the-veto)
 6. [Why this is not a chatbot](#why-this-is-not-a-chatbot)
 7. [Proof of concurrency](#proof-of-concurrency)
-8. [Wall](#wall)
-9. [Live (optional)](#live-optional)
-10. [Layout](#layout)
+8. [Mozaik cloud](#mozaik-cloud)
+9. [Wall](#wall)
+10. [Live (optional)](#live-optional)
+11. [Layout](#layout)
 
 ---
 
@@ -38,12 +39,12 @@ Open http://localhost:8787 and watch.
 | ~2s | Archaeologist and Hypothesis emit on the same clock |
 | ~4s | Fixer drafts `kubectl delete pod checkout-api --all` |
 | same run | RedTeam strikes only that span |
-| after | Fixer pivots to restore `PG_POOL_SIZE=50` and bounce a canary |
+| after | Safer path: restore `PG_POOL_SIZE=50`, bounce a canary |
 | any time | Commander Join / Send / Leave. `do not delete` pulls the same veto gate |
 
-**R** restart · **K** Kill-cam (replay the veto window) · `npm test` detector.
+**R** restart · **K** Kill-cam (window around the veto) · `npm test` detector.
 
-Replay is the complete visual demo. Live Mozaik is in `src/mozaik-live.ts` when a supported model key is present.
+Replay is the complete visual demo. Live Mozaik is `src/mozaik-live.ts` plus Mozaik cloud when paired.
 
 ---
 
@@ -72,9 +73,10 @@ Archaeologist Hyp    Fixer
              safe      VetoIssued → FixPivoted → safer draft
 
 Commander is on the same bus
+(live: the commander message is what starts the three loops)
 ```
 
-Archaeologist and Hypothesis **overlap** Fixer. They do not have to finish before the draft starts. The UI only renders bus events. `t_ms` is elapsed time from incident start.
+Archaeologist and Hypothesis **overlap** Fixer. They do not have to finish before the draft starts. The UI only renders bus events.
 
 ---
 
@@ -82,14 +84,14 @@ Archaeologist and Hypothesis **overlap** Fixer. They do not have to finish befor
 
 | Name | Role | Live model loop? |
 | --- | --- | --- |
-| Sentry | Alarm + raw lines | No — fixture / `IncidentDeclared` |
+| Sentry | Alarm + raw lines | No — `IncidentDeclared` |
 | Triage | SEV1 + reason | No — `SeveritySet` |
 | Archaeologist | Evidence | Yes — `runLoop` |
 | Hypothesis | Causes | Yes — `runLoop` |
 | Fixer | Draft | Yes — `runLoop` |
 | RedTeam | Veto | Same runtime; `findVeto` on Fixer text |
 | Facts / Comms | Right rail | Observer |
-| Commander | Human bar. Join, send an order, leave. Halt phrases pull the veto gate | `createHuman` — not an LLM |
+| Commander | Human bar | `createHuman` — not an LLM |
 
 Six panels are not six paid models.
 
@@ -97,19 +99,15 @@ Six panels are not six paid models.
 
 ## The veto
 
-This is the interaction the room is built around — not a prize beat.
-
-Fixer drafts `kubectl delete pod checkout-api --all`. The detector in `src/veto.ts` marks **that span**, not the whole paragraph.
+Fixer drafts `kubectl delete pod checkout-api --all`. `src/veto.ts` marks **that span**, not the whole paragraph.
 
 ```
 FixDraftFinal → findVeto() → VetoIssued → FixPivoted → safer draft
 ```
 
-Safer draft: restore `PG_POOL_SIZE=50`, bounce canary only.
+On **replay**, the strike happens while the line is still being written. On **live**, Fixer streaming is off in this repo; `findVeto` runs on the text that arrives. Live Gemini often writes the safe pool restore, so there may be no red span — that is the detector, not a miss.
 
-On **replay**, that strike happens while the line is still being written. On **live**, Fixer streaming is off in this repo so the process stays up; `findVeto` runs on the Fixer text that arrives.
-
-Commander can pull the **same gate** without a model. After Fixer has started the dangerous line, Join and send one of: `do not delete`, `hold the kubectl`, `no kubectl`, `stop delete`, `veto`. That emits `VetoIssued` from `commander`. `page payments on-call too` is logged in Facts only — it does not steer Fixer. The halt is pattern match + `src/veto.ts`, not an LLM classifying the order.
+Commander can pull the same gate without a model. After a dangerous draft exists, send `do not delete` / `hold the kubectl` / `veto`. `page payments on-call too` is logged only.
 
 ---
 
@@ -120,10 +118,8 @@ Commander can pull the **same gate** without a model. After Fixer has started th
 | Each stage waits | Three loops start on one SEV1 |
 | Reviewer sees a finished command | RedTeam can change the outcome |
 | Canned status | Facts = landed events only |
-| Human is a prompt | Commander joins, logs an order, and can halt a delete |
+| Human is a prompt | Commander joins, logs an order, can halt a delete |
 | Overlap is animation | Swimlane from `t_ms` |
-
-If two ticks are never hot together, concurrency is wrong. If the whole Fixer paragraph goes red, the veto is wrong.
 
 ---
 
@@ -137,7 +133,56 @@ infer("hypothesis", ...)
 infer("fixer", ...)
 ```
 
-No wait between those calls. Each emits `LoopStarted` with `t_ms`. Facts and the swimlane use those events.
+No wait between those calls. Each emits `LoopStarted` with `t_ms`.
+
+---
+
+## Mozaik cloud
+
+Official weekend viewer. One command, no extra product code:
+
+```bash
+npx @mozaik-ai/cloud-sdk pair
+npm run live
+```
+
+Approve the browser prompt. `@mozaik-ai/core` 4.x events go to [Mozaik cloud](https://app.jigjoy.ai/).
+
+After a live run a reviewer should see three agents, **1 loop each**, same SEV1 in memory.
+
+### Archaeologist
+
+![Archaeologist on Mozaik cloud](assets/mozaik-cloud-archaeologist.png)
+
+### Hypothesis
+
+![Hypothesis on Mozaik cloud](assets/mozaik-cloud-hypothesis.png)
+
+### Fixer
+
+![Fixer on Mozaik cloud](assets/mozaik-cloud-fixer.png)
+
+Each **details** tab should show instruction, the user SEV1, and the assistant answer. Open **loops** if you want timings.
+
+RedTeam does not need its own loop unless a pivot `runLoop` fires. Pair is **not** a model key.
+
+**How to save the three images**
+
+1. `npm run live` until cloud shows **LIVE**.
+2. Left sidebar **Agents** → click **archaeologist** → **details**.
+3. `Win+Shift+S`, save as `assets/mozaik-cloud-archaeologist.png`.
+4. Click **hypothesis** → **details** → save `assets/mozaik-cloud-hypothesis.png`.
+5. Click **fixer** → **details** → save `assets/mozaik-cloud-fixer.png`.
+
+Exact paths:
+
+```
+C:\Users\Ebubechukwu\Documents\pulse\assets\mozaik-cloud-archaeologist.png
+C:\Users\Ebubechukwu\Documents\pulse\assets\mozaik-cloud-hypothesis.png
+C:\Users\Ebubechukwu\Documents\pulse\assets\mozaik-cloud-fixer.png
+```
+
+Do not capture API keys, `.env`, or Billing. Commit all three PNGs with the README.
 
 ---
 
@@ -151,37 +196,31 @@ No wait between those calls. Each emits `LoopStarted` with `t_ms`. Facts and the
 
 **Facts** — far right. Landed events only.
 
-**Overlap** — bars from timestamps. Stacked = concurrent.
+**Overlap** — bars from timestamps.
 
-**Commander** — bottom. Join / Send / Leave. Halt phrases (`do not delete`, …) emit `VetoIssued` from commander. Other lines land in Facts only. Status on the right is the last bus event.
+**Commander** — bottom. Status on the right is the last bus event.
 
 ---
 
 ## Live (optional)
 
-Replay needs no model. Live (`npm run live`) uses `@mozaik-ai/core` and **whichever allowlisted provider you have credit for**. Gemini is one option, not the only one. Mozaik picks the vendor from the model name.
+Replay needs no model. Live uses whichever **allowlisted** provider you have credit for.
 
 | Provider | Env var | Example `PULSE_MODEL_FAST` |
 | --- | --- | --- |
-| Google | `GEMINI_API_KEY` | `gemini-3.5-flash` or `gemini-3.1-pro-preview` |
-| OpenAI | `OPENAI_API_KEY` | `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.5` |
-| Anthropic | `ANTHROPIC_API_KEY` | `claude-haiku-4-5`, `claude-sonnet-4-6`, `claude-opus-4-7`, `claude-opus-4-8` |
-| DeepSeek | `OPENAI_API_KEY` + compatible base URL if required | `deepseek-v4-flash`, `deepseek-v4-pro` |
+| Google | `GEMINI_API_KEY` | `gemini-3.5-flash` |
+| OpenAI | `OPENAI_API_KEY` | `gpt-5.5` |
+| Anthropic | `ANTHROPIC_API_KEY` | `claude-haiku-4-5` |
+| DeepSeek | `OPENAI_API_KEY` + compatible base URL | `deepseek-v4-flash` |
 
 ```powershell
-$env:GEMINI_API_KEY="your-key"              # or OPENAI_API_KEY / ANTHROPIC_API_KEY
-$env:PULSE_MODEL_FAST="gemini-3.5-flash"    # or gpt-5.5 / claude-haiku-4-5 / ...
 npm run live
 ```
 
-`.env` next to `package.json`, never committed. Same variable names as the table.
-
-Names **not** on that list (Groq, Llama, `gpt-4.1-mini`) fail before HTTP. Ignore `MOZAIK_API_KEY` (telemetry). Node 22+.
-
-Live Fixer uses `streaming: false` in this build. Gemini streaming hits a missing Mozaik transition after `inference_streaming`. Replay still shows the mid-line strike. OpenAI streaming may work if you have credit; do not claim it until you see chunks on the wall.
+`.env` next to `package.json`, never committed. Groq / Llama / `gpt-4.1-mini` are rejected before HTTP. Ignore pairing vs model keys: pair = cloud telemetry; `GEMINI_API_KEY` = tokens. Node 22+.
 
 ---
 
 ## Layout
 
-`src/mozaik-live.ts` · `src/replay.ts` · `src/veto.ts` · `src/load-env.ts` · `ui/`
+`src/mozaik-live.ts` · `src/replay.ts` · `src/veto.ts` · `src/load-env.ts` · `ui/` · `assets/`
