@@ -4,7 +4,9 @@ import { readFileSync, existsSync } from "node:fs";
 import { extname, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bus } from "./bus.ts";
+import { clock } from "./clock.ts";
 import { playCheckoutDemo } from "./replay.ts";
+import { findVeto } from "./veto.ts";
 import { liveStatus, startLiveRoom } from "./live.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -51,7 +53,7 @@ const httpServer = createServer((req, res) => {
   if (url === "/api/join" && req.method === "POST") {
     bus.emit({
       id: crypto.randomUUID(),
-      t_ms: Date.now(),
+      t_ms: clock.now(),
       type: "RosterChanged",
       from: "commander",
       to: "broadcast",
@@ -64,7 +66,7 @@ const httpServer = createServer((req, res) => {
   if (url === "/api/leave" && req.method === "POST") {
     bus.emit({
       id: crypto.randomUUID(),
-      t_ms: Date.now(),
+      t_ms: clock.now(),
       type: "RosterChanged",
       from: "commander",
       to: "broadcast",
@@ -72,7 +74,7 @@ const httpServer = createServer((req, res) => {
     });
     bus.emit({
       id: crypto.randomUUID(),
-      t_ms: Date.now(),
+      t_ms: clock.now(),
       type: "ParticipantLeftWork",
       from: "commander",
       to: "broadcast",
@@ -98,12 +100,35 @@ const httpServer = createServer((req, res) => {
       if (text) {
         bus.emit({
           id: crypto.randomUUID(),
-          t_ms: Date.now(),
+          t_ms: clock.now(),
           type: "HumanDirective",
           from: "commander",
           to: "broadcast",
           payload: { text },
         });
+        const wantsHalt = /do not delete|don't delete|hold the|no kubectl|stop delete|veto/i.test(text);
+        if (wantsHalt) {
+          const lastFix = [...bus.log].reverse().find((e) => e.type === "FixDraftDelta" || e.type === "FixDraftFinal");
+          const draft = String(lastFix?.payload?.fullSoFar || lastFix?.payload?.text || "kubectl delete");
+          const hit = findVeto(draft) || {
+            atChar: Math.max(0, draft.toLowerCase().indexOf("kubectl")),
+            dangerousSpan: "kubectl delete",
+            reason: "commander halted destructive remediation",
+          };
+          bus.emit({
+            id: crypto.randomUUID(),
+            t_ms: clock.now(),
+            type: "VetoIssued",
+            from: "commander",
+            to: "fixer",
+            payload: {
+              draftId: "draft-1",
+              atChar: hit.atChar,
+              reason: "commander: " + hit.reason,
+              dangerousSpan: hit.dangerousSpan,
+            },
+          });
+        }
       }
       res.writeHead(202).end("ok");
     });
@@ -118,6 +143,10 @@ const httpServer = createServer((req, res) => {
   }
   res.writeHead(200, { "content-type": mime[extname(file)] ?? "text/plain" });
   res.end(readFileSync(file));
+});
+
+process.on("unhandledRejection", (err) => {
+  console.log("live loop warning:", String(err?.message ?? err));
 });
 
 httpServer.listen(port, () => {

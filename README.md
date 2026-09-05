@@ -39,7 +39,7 @@ Open http://localhost:8787 and watch.
 | ~4s | Fixer drafts `kubectl delete pod checkout-api --all` |
 | same run | RedTeam strikes only that span |
 | after | Fixer pivots to restore `PG_POOL_SIZE=50` and bounce a canary |
-| any time | Commander Join / Send / Leave |
+| any time | Commander Join / Send / Leave. `do not delete` pulls the same veto gate |
 
 **R** restart · **K** Kill-cam (replay the veto window) · `npm test` detector.
 
@@ -90,7 +90,7 @@ Archaeologist and Hypothesis **overlap** Fixer. They do not have to finish befor
 | Fixer | Draft | Yes — `runLoop` |
 | RedTeam | Veto | Same runtime; `findVeto` on Fixer text |
 | Facts / Comms | Right rail | Observer |
-| Commander | Human bar | `createHuman` |
+| Commander | Human bar. Join, send an order, leave. Halt phrases pull the veto gate | `createHuman` — not an LLM |
 
 Six panels are not six paid models.
 
@@ -108,7 +108,9 @@ FixDraftFinal → findVeto() → VetoIssued → FixPivoted → safer draft
 
 Safer draft: restore `PG_POOL_SIZE=50`, bounce canary only.
 
-On **replay**, that strike happens while the line is still being written. On **live**, streaming is off (this Mozaik + Gemini build dies on `inference_streaming`), so `findVeto` runs on the Fixer text that actually arrives.
+On **replay**, that strike happens while the line is still being written. On **live**, Fixer streaming is off in this repo so the process stays up; `findVeto` runs on the Fixer text that arrives.
+
+Commander can pull the **same gate** without a model. After Fixer has started the dangerous line, Join and send one of: `do not delete`, `hold the kubectl`, `no kubectl`, `stop delete`, `veto`. That emits `VetoIssued` from `commander`. `page payments on-call too` is logged in Facts only — it does not steer Fixer. The halt is pattern match + `src/veto.ts`, not an LLM classifying the order.
 
 ---
 
@@ -119,7 +121,7 @@ On **replay**, that strike happens while the line is still being written. On **l
 | Each stage waits | Three loops start on one SEV1 |
 | Reviewer sees a finished command | RedTeam can change the outcome |
 | Canned status | Facts = landed events only |
-| Human is a prompt | Commander joins and leaves |
+| Human is a prompt | Commander joins, logs an order, and can halt a delete |
 | Overlap is animation | Swimlane from `t_ms` |
 
 If two ticks are never hot together, concurrency is wrong. If the whole Fixer paragraph goes red, the veto is wrong.
@@ -152,24 +154,35 @@ No wait between those calls. Each emits `LoopStarted` with `t_ms`. Facts and the
 
 **Overlap** — bars from timestamps. Stacked = concurrent.
 
-**Commander** — bottom. Status on the right is the last bus event.
+**Commander** — bottom. Join / Send / Leave. Halt phrases (`do not delete`, …) emit `VetoIssued` from commander. Other lines land in Facts only. Status on the right is the last bus event.
 
 ---
 
 ## Live (optional)
 
+Replay needs no model. Live (`npm run live`) uses `@mozaik-ai/core` and **whichever allowlisted provider you have credit for**. Gemini is one option, not the only one. Mozaik picks the vendor from the model name.
+
+| Provider | Env var | Example `PULSE_MODEL_FAST` |
+| --- | --- | --- |
+| Google | `GEMINI_API_KEY` | `gemini-3.5-flash` or `gemini-3.1-pro-preview` |
+| OpenAI | `OPENAI_API_KEY` | `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.5` |
+| Anthropic | `ANTHROPIC_API_KEY` | `claude-haiku-4-5`, `claude-sonnet-4-6`, `claude-opus-4-7`, `claude-opus-4-8` |
+| DeepSeek | `OPENAI_API_KEY` + compatible base URL if required | `deepseek-v4-flash`, `deepseek-v4-pro` |
+
 ```powershell
-$env:GEMINI_API_KEY="your-key"
-$env:PULSE_MODEL_FAST="gemini-3.5-flash"
+$env:GEMINI_API_KEY="your-key"              # or OPENAI_API_KEY / ANTHROPIC_API_KEY
+$env:PULSE_MODEL_FAST="gemini-3.5-flash"    # or gpt-5.5 / claude-haiku-4-5 / ...
 npm run live
 ```
 
-`.env` next to `package.json`, never committed. Allowlisted names only: `gemini-3.5-flash`, `gemini-3.1-pro-preview`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.5`, `claude-haiku-4-5`, `claude-sonnet-4-6`, `claude-opus-4-7`, `claude-opus-4-8`, `deepseek-v4-flash`, `deepseek-v4-pro`.
+`.env` next to `package.json`, never committed. Same variable names as the table.
 
-Groq / Llama / `gpt-4.1-mini` are rejected before HTTP. Ignore `MOZAIK_API_KEY`. Node 22+.
+Names **not** on that list (Groq, Llama, `gpt-4.1-mini`) fail before HTTP. Ignore `MOZAIK_API_KEY` (telemetry). Node 22+.
+
+Live Fixer uses `streaming: false` in this build. Gemini streaming hits a missing Mozaik transition after `inference_streaming`. Replay still shows the mid-line strike. OpenAI streaming may work if you have credit; do not claim it until you see chunks on the wall.
 
 ---
 
 ## Layout
 
-`src/mozaik-live.ts` · `src/replay.ts` · `src/veto.ts` · `src/load-env.ts` · `ui/` · `SUBMISSION.md`
+`src/mozaik-live.ts` · `src/replay.ts` · `src/veto.ts` · `src/load-env.ts` · `ui/`

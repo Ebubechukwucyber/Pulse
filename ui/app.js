@@ -172,6 +172,18 @@ function apply(ev, record) {
   if (ev.type === "RosterChanged") {
     for (const id of ev.payload.joined || []) roster.add(id);
     for (const id of ev.payload.left || []) roster.delete(id);
+    if ((ev.payload.joined || []).includes("commander")) {
+      addFact("join:" + ev.t_ms, "commander", ev.payload.reason || "joined");
+    }
+    if ((ev.payload.left || []).includes("commander")) {
+      addFact("leave:" + ev.t_ms, "commander", ev.payload.reason || "left");
+    }
+  }
+  if (ev.type === "LoopStarted") {
+    const role = ev.payload.role || ev.from;
+    addFact("start:" + role + ":" + ev.t_ms, "START " + role, "t_ms " + ev.t_ms + " (bus clock)");
+    ui.overlap.textContent = "start " + role + " @" + ev.t_ms + "ms";
+    ui.overlap.className = "yes";
   }
   if (ev.type === "EvidenceFound") {
     addFact(`e:${ev.payload.path}:${ev.payload.quote}`, ev.payload.path, ev.payload.quote);
