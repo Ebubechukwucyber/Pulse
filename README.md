@@ -72,7 +72,6 @@ Archaeologist Hyp    Fixer
              safe      VetoIssued → FixPivoted → safer draft
 
 Commander is on the same bus
-(live: the commander message is what starts the three loops)
 ```
 
 Archaeologist and Hypothesis **overlap** Fixer. They do not have to finish before the draft starts. The UI only renders bus events. `t_ms` is elapsed time from incident start.
