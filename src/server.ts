@@ -4,7 +4,7 @@ import { extname, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bus } from "./bus.ts";
 import { playCheckoutDemo } from "./replay.ts";
-import { liveStatus } from "./live.ts";
+import { liveStatus, startLiveRoom } from "./live.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ui = join(root, "ui");
@@ -121,6 +121,22 @@ const httpServer = createServer((req, res) => {
 
 httpServer.listen(port, () => {
   console.log(`PULSE ${mode}  http://localhost:${port}`);
-  if (mode === "live") console.log(liveStatus());
-  void playCheckoutDemo();
+  if (mode === "live") {
+    void startPreferredLive();
+  } else {
+    void playCheckoutDemo();
+  }
 });
+
+async function startPreferredLive() {
+  try {
+    await import("@mozaik-ai/core");
+    const mozaik = await import("./mozaik-live.ts");
+    console.log(mozaik.liveStatus());
+    await mozaik.startMozaikRoom();
+  } catch (err) {
+    console.log(liveStatus());
+    console.log("Mozaik package or key missing — local intercept room.", String(err?.message ?? err));
+    await startLiveRoom();
+  }
+}
