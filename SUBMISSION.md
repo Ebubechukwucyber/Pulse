@@ -1,20 +1,27 @@
-# PULSE — submission copy (paste into the form)
+# Submission paste
 
 ## Project name
+
 PULSE
 
 ## Short description
-Incident command where a fixer streams a mitigation and RedTeam cuts a dangerous command before the line is finished. Two Mozaik agents, one runtime, one shared clock.
+
+Incident command room for a checkout SEV1. Archaeologist, Hypothesis and Fixer start Mozaik `runLoop`s on the same incident without waiting. RedTeam vetoes a dangerous `kubectl delete` so Fixer pivots. Replay runs with no API key.
 
 ## How the concurrent agents work
-Fixer and RedTeam `join` the same Mozaik runtime. Fixer `runLoop`s with `streaming: true`. Every `inference.stream` chunk is visible to RedTeam at the same time. RedTeam runs `findVeto` on the text so far. On a hit it publishes `VetoIssued` and an `InterceptionHandler` steers Fixer's loop to `idle` so the rest of `kubectl delete … --all` never lands. The commander is a Mozaik human: join, send one directive, leave. Replay is the no-key backup of the same wall.
+
+Four agents join one `@mozaik-ai/core` runtime. A Commander human declares the SEV1. Archaeologist, Hypothesis and Fixer each call `runLoop` on that message before any of them finish. Each start emits `LoopStarted` with shared `t_ms`. Outputs map by participant id onto `EvidenceFound`, `HypothesisPosted`, and `FixDraftFinal`. `findVeto` in `src/veto.ts` can emit `VetoIssued` and force `FixPivoted`. The wall only renders bus events.
+
+Six panels are not six paid models. Sentry and Triage are the incident header. RedTeam is on the runtime and scores the draft.
 
 ## Why this is not a pipeline
-Review does not wait for a finished command. Intercept is on the token stream. Archaeologist/hypothesis overlap is shown on the swimlane in replay. Kill-cam replays the three seconds before the veto from the event log.
 
-## Demo (90s)
-1. `npm run live` if `@mozaik-ai/core` and a key are present, else `npm run replay`
-2. Open http://localhost:8787
-3. Watch two ticks hot, then the strike-through on only the dangerous span
-4. Press Kill-cam
-5. Join, type `page payments on-call too`, Send, Leave
+Investigation, hypothesis, and remediation start from the same event. Review is not a later stage. Replay: `npm run replay` then http://localhost:8787. Live: `npm run live` with `gemini-3.5-flash`. Grep `runLoop` in `src/mozaik-live.ts`.
+
+## Demo steps
+
+1. `npm install && npm run replay`
+2. Watch overlap, the struck-through delete, the safer pool restore
+3. Press Kill-cam
+4. Join as Commander, send one line, Leave
+5. Optional: `npm test` and open `src/mozaik-live.ts`
