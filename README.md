@@ -35,6 +35,8 @@ Wall mapping:
 
 Grep: `runLoop` and `LoopStarted` in `src/mozaik-live.ts`.
 
+**Six panels is not six model calls.** Sentry and Triage are the incident header (fixture events). Archaeologist, Hypothesis and Fixer are the three concurrent `runLoop`s. RedTeam is on the same runtime and vetoes the draft; it is not a fourth billed loop unless a pivot runs. Commander is the labeled human bar at the bottom.
+
 ---
 
 ## Judge it in 90 seconds

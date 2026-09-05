@@ -62,12 +62,18 @@ button:hover { border-color: #3a4250; }
 .agents span.veto i { background: var(--red); }
 main {
   display: grid;
-  grid-template-columns: 1fr 1fr 240px;
+  grid-template-columns: minmax(0, 1fr) 280px;
   min-height: 0;
   overflow: hidden;
   isolation: isolate;
 }
-.streams { display: contents; }
+.streams {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  min-height: 0;
+  overflow: hidden;
+}
 main article, main aside {
   min-height: 0;
   overflow: auto;

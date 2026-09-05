@@ -36,6 +36,22 @@
     <main>
       <section class="col streams">
         <article>
+          <h1>Sentry <span id="sentry-state">idle</span></h1>
+          <div id="sentry" class="draft"></div>
+        </article>
+        <article>
+          <h1>Triage <span id="triage-state">idle</span></h1>
+          <div id="triage" class="draft"></div>
+        </article>
+        <article>
+          <h1>Archaeologist <span id="arch-state">idle</span></h1>
+          <div id="arch" class="draft"></div>
+        </article>
+        <article>
+          <h1>Hypothesis <span id="hyp-state">idle</span></h1>
+          <div id="hyp" class="draft"></div>
+        </article>
+        <article>
           <h1>Fixer <span id="fixer-state">idle</span></h1>
           <div id="fixer" class="draft"></div>
         </article>
@@ -45,7 +61,7 @@
         </article>
       </section>
       <aside>
-        <h1>Facts</h1>
+        <h1>Facts / Comms</h1>
         <div id="facts"></div>
       </aside>
     </main>
@@ -59,9 +75,10 @@
     </section>
 
     <footer class="cmd">
+      <b class="cmd-label">Commander</b>
       <button type="button" id="join">Join</button>
       <button type="button" id="leave">Leave</button>
-      <input id="cmd" type="text" maxlength="200" placeholder="Directive — page payments on-call too" />
+      <input id="cmd" type="text" maxlength="200" placeholder="Commander directive — page payments on-call too" />
       <button type="button" id="send">Send</button>
       <span id="status">connecting</span>
     </footer>
