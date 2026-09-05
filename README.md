@@ -2,21 +2,15 @@
 
 **The dangerous command dies before it finishes being written.**
 
-PULSE is a live incident command room built around concurrent agents.
+PULSE is an incident command room. `checkout-api` is in SEV1 after a deploy. Archaeologist, Hypothesis and Fixer start work on that incident at the same time. RedTeam can veto a dangerous mitigation so the room has to change course. You are Commander: join, send one directive, leave.
 
-`checkout-api` is in SEV1 immediately after a deploy. Multiple specialists investigate the same incident at the same time. Archaeologist searches for evidence. Hypothesis develops possible causes. Fixer prepares remediation. RedTeam watches for dangerous actions and can veto them, forcing the room to pivot.
-
-You are the Commander. You can join the incident, issue a directive, and leave.
-
-Not a chatbot. Not a sequential pipeline. The product is the overlap—and the veto.
+Not a chatbot. Not a queue. The product is the overlap and the veto.
 
 Built for **JigJoy × daily.dev × Hyperskill — Build Systems of Concurrent Agents**.
 
 ---
 
-## Run it in 60 seconds
-
-Deterministic replay — no API key required.
+## Run it (no API key)
 
 ```bash
 npm install
@@ -27,118 +21,101 @@ Open http://localhost:8787 and watch.
 
 | Time | What happens |
 | --- | --- |
-| 0s | `checkout-api` enters SEV1 after a deploy |
-| ~2s | Sentry and Triage establish the incident |
-| ~2s onward | Archaeologist and Hypothesis work concurrently |
-| ~4s | Fixer begins proposing a dangerous `kubectl delete` command |
-| Immediately | RedTeam detects and vetoes the dangerous span |
-| After the veto | Fixer pivots toward a safer remediation |
-| Any time | Commander can join, send a directive, or leave |
+| 0s | Sentry declares `checkout-api`. Triage sets SEV1 |
+| ~2s | Archaeologist and Hypothesis emit on the same clock |
+| ~4s | Fixer drafts `kubectl delete pod checkout-api --all` |
+| same run | RedTeam strikes only that span |
+| after | Fixer pivots to restore `PG_POOL_SIZE=50` and bounce a canary |
+| any time | Commander Join / Send / Leave |
 
-Controls: **R** restart · **K** Kill-cam (seconds around the veto) · `npm test` veto detector.
+**R** restart · **K** Kill-cam (replay the veto window) · `npm test` detector.
 
-`npm run replay` is intentionally deterministic so a judge can run the full demonstration without credentials. The repository separately contains the real Mozaik concurrent-agent implementation (`src/mozaik-live.ts`).
+Replay is the complete visual demo. Live Mozaik is in `src/mozaik-live.ts` when a supported model key is present.
 
 ---
 
 ## The problem
 
-A production incident does not happen in a neat pipeline.
+Incidents are not pipelines. At 3am one person reads logs, one argues the deploy, one types `kubectl`, one says do not run that in prod.
 
-At 3am a human war room might have one engineer reading logs, another investigating the deploy, another proposing a fix, and someone saying *do not run that against production*.
+Most multi-agent demos still go search → analyze → propose → review. The review starts after the command exists.
 
-Most multi-agent demos serialize that work: search → analyze → propose → review. By the time the reviewer appears, the dangerous command may already exist.
-
-PULSE asks: what if those specialists were active **concurrently** in the same room? The result is not more agents talking. It is overlapping investigation, competing action, and intervention before a bad remediation becomes the outcome.
+PULSE keeps investigation, a guess, a fix, and a safety check on one clock.
 
 ---
 
-## How PULSE works
+## How it is wired
 
 ```
-                    COMMANDER (human directive)
-                              |
-                              v
-                 SHARED INCIDENT  (event bus + t_ms)
-                 /              |               \
-        ARCHAEOLOGIST     HYPOTHESIS            FIXER
-          evidence          causes           remediation
-                 \              |               /
-                              v
-                         FIX DRAFT
-                              |
-                           REDTEAM
-                      /               \
-                   SAFE            DANGEROUS
-                     |                 |
-                 continue         VetoIssued
-                                       |
-                                  FixPivoted
-                                       |
-                              safer remediation
+Sentry / Triage declare SEV1
+              |
+      shared bus + t_ms
+        /     |      \
+Archaeologist Hyp    Fixer
+  evidence   causes  draft     (live: three runLoops, same incident)
+                      |
+                 findVeto
+                /         \
+             safe      VetoIssued → FixPivoted → safer draft
+
+Commander is on the same bus
+(live: the commander message is what starts the three loops)
 ```
 
-All participants operate around a shared incident clock, `t_ms`. The UI does not invent activity. Every visible state is derived from events that entered the room.
+Archaeologist and Hypothesis **overlap** Fixer. They do not have to finish before the draft starts. The UI only renders bus events. `t_ms` is elapsed time from incident start.
 
 ---
 
-## The incident roster
+## Roster
 
-| Participant | Role |
-| --- | --- |
-| Sentry | Raises the alarm and publishes raw incident evidence |
-| Triage | Sets severity and explains the impact |
-| Archaeologist | Investigates logs and repository evidence |
-| Hypothesis | Develops possible root causes |
-| Fixer | Drafts remediation |
-| RedTeam | Detects dangerous remediation and issues a veto |
-| Comms / Facts | Reports only what has already landed |
-| Commander | Human who can join, direct, and leave |
+| Name | Role | Live model loop? |
+| --- | --- | --- |
+| Sentry | Alarm + raw lines | No — fixture / `IncidentDeclared` |
+| Triage | SEV1 + reason | No — `SeveritySet` |
+| Archaeologist | Evidence | Yes — `runLoop` |
+| Hypothesis | Causes | Yes — `runLoop` |
+| Fixer | Draft | Yes — `runLoop` |
+| RedTeam | Veto | Same runtime; `findVeto` on Fixer text |
+| Facts / Comms | Right rail | Observer |
+| Commander | Human bar | `createHuman` |
 
-**Clarification:** the six visible specialist panels are not six independent paid LLM calls. The concurrency claim is specific: Archaeologist, Hypothesis, and Fixer launch concurrent Mozaik `runLoop`s on the same SEV1. RedTeam and Commander participate in that room.
+Six panels are not six paid models.
 
 ---
 
-## The money shot: the veto
+## The veto
 
-Fixer drafts:
+This is the interaction the room is built around — not a prize beat.
 
-```
-kubectl delete pod checkout-api --all
-```
-
-PULSE does not paint the entire response red. The deterministic detector identifies that span. The room emits:
+Fixer drafts `kubectl delete pod checkout-api --all`. The detector in `src/veto.ts` marks **that span**, not the whole paragraph.
 
 ```
-FixDraftFinal → findVeto() → VetoIssued → FixPivoted → safer remediation
+FixDraftFinal → findVeto() → VetoIssued → FixPivoted → safer draft
 ```
 
-The safer path restores `PG_POOL_SIZE=50` and limits recovery to a canary instead of deleting production workload.
+Safer draft: restore `PG_POOL_SIZE=50`, bounce canary only.
 
-Fixer proposes. RedTeam constrains. The outcome changes. That causal chain is why the agents exist concurrently.
+On **replay**, that strike happens while the line is still being written. On **live**, streaming is off (this Mozaik + Gemini build dies on `inference_streaming`), so `findVeto` runs on the Fixer text that actually arrives.
 
 ---
 
 ## Why this is not a chatbot
 
-| A typical pipeline | PULSE |
+| Pipeline | PULSE |
 | --- | --- |
-| One stage waits for the previous | Specialists begin on the same incident together |
-| Search finishes before analysis | Archaeologist and Hypothesis can overlap |
-| A reviewer sees the completed proposal | RedTeam can alter the outcome |
-| Canned dashboard copy | Facts only render landed events |
-| Human hidden in a prompt | Commander is a real participant |
-| Concurrency is animation | Overlap timeline is event timestamps |
+| Each stage waits | Three loops start on one SEV1 |
+| Reviewer sees a finished command | RedTeam can change the outcome |
+| Canned status | Facts = landed events only |
+| Human is a prompt | Commander joins and leaves |
+| Overlap is animation | Swimlane from `t_ms` |
 
-If the agents never overlap, the concurrency implementation is wrong. If the entire Fixer response is marked dangerous instead of the detected span, the veto implementation is wrong.
+If two ticks are never hot together, concurrency is wrong. If the whole Fixer paragraph goes red, the veto is wrong.
 
 ---
 
 ## Proof of concurrency
 
-Inspect `src/mozaik-live.ts`.
-
-On the same Commander-declared SEV1, Archaeologist, Hypothesis, and Fixer are launched without waiting for one another:
+`src/mozaik-live.ts` — grep `runLoop`.
 
 ```
 infer("archaeologist", ...)
@@ -146,73 +123,27 @@ infer("hypothesis", ...)
 infer("fixer", ...)
 ```
 
-Each path enters its own Mozaik `runLoop`. `LoopStarted` records `t_ms`. Those timestamps drive the Facts rail, activity ticks, and overlap swimlane — not CSS delays.
-
-```bash
-grep -n "runLoop" src/mozaik-live.ts
-```
+No wait between those calls. Each emits `LoopStarted` with `t_ms`. Facts and the swimlane use those events.
 
 ---
 
-## Event architecture
+## Wall
 
-The bus is the shared state of the room: `IncidentDeclared`, `SeveritySet`, `RosterChanged`, `LoopStarted`, `EvidenceFound`, `HypothesisPosted`, `FixDraftDelta`, `FixDraftFinal`, `VetoIssued`, `FixPivoted`, `HumanDirective`, `ParticipantLeftWork`, `IncidentMitigated`.
+**Header** — service, SEV1, error %, p99, deploy age, clock.
 
-The wall observes. It does not manufacture metrics.
+**Ticks** — a name lights when that participant emits.
 
----
+**Panels** — Sentry, Triage, Archaeologist, Hypothesis, Fixer, RedTeam.
 
-## The war-room wall
+**Facts** — far right. Landed events only.
 
-**Header** — service, severity, error rate, p99, deploy age, incident clock. Replay and Kill-cam.
+**Overlap** — bars from timestamps. Stacked = concurrent.
 
-**Tick row** — a name lights when that participant emits.
-
-**Sentry** — `IncidentDeclared` (alarm + raw lines).
-
-**Triage** — `SeveritySet` (severity + why).
-
-**Archaeologist** — `EvidenceFound`.
-
-**Hypothesis** — `HypothesisPosted`.
-
-**Fixer** — `FixDraftDelta` / `FixDraftFinal`. Only the dangerous span is marked.
-
-**RedTeam** — `VetoIssued` (reason + span).
-
-**Facts / Comms** — right rail. Only landed events, including `LoopStarted`.
-
-**Overlap** — swimlane from shared timestamps. Stacked bars = overlapping work.
-
-**Commander** — bottom bar. Join, type a directive, Send, Leave. Status on the right is the latest bus event.
+**Commander** — bottom. Status on the right is the last bus event.
 
 ---
 
-## Deterministic safety detector
-
-The veto is not delegated entirely to an LLM. `src/veto.ts` matches dangerous patterns (`kubectl delete`, `drop table`, `rm -rf`, …) and returns the span so the UI can strike exactly that text.
-
-```bash
-npm test
-```
-
----
-
-## Live Mozaik mode
-
-Real `@mozaik-ai/core` path: runtime, `createAgent`, `createHuman`, `join`, concurrent `runLoop`. Archaeologist, Hypothesis, and Fixer on the same SEV1. RedTeam scores Fixer output with `findVeto`. Commander is a human participant.
-
-```bash
-npm install @mozaik-ai/core
-```
-
-`.env` next to `package.json` (do not commit):
-
-```
-GEMINI_API_KEY=your-key
-PULSE_MODEL_FAST=gemini-3.5-flash
-PULSE_PORT=8787
-```
+## Live (optional)
 
 ```powershell
 $env:GEMINI_API_KEY="your-key"
@@ -220,50 +151,25 @@ $env:PULSE_MODEL_FAST="gemini-3.5-flash"
 npm run live
 ```
 
-Allowlisted model ids in this Mozaik build: `gemini-3.5-flash`, `gemini-3.1-pro-preview`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.5`, `claude-haiku-4-5`, `claude-sonnet-4-6`, `claude-opus-4-7`, `claude-opus-4-8`, `deepseek-v4-flash`, `deepseek-v4-pro`.
+`.env` next to `package.json`, never committed. Allowlisted names only: `gemini-3.5-flash`, `gemini-3.1-pro-preview`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.5`, `claude-haiku-4-5`, `claude-sonnet-4-6`, `claude-opus-4-7`, `claude-opus-4-8`, `deepseek-v4-flash`, `deepseek-v4-pro`.
 
-Unsupported names (Groq/Llama/`gpt-4.1-mini`) fail before HTTP. Ignore `MOZAIK_API_KEY` (telemetry). Node 22+. Strip-only TypeScript — no constructor parameter properties. Live uses `streaming: false`.
+Groq / Llama / `gpt-4.1-mini` are rejected before HTTP. Ignore `MOZAIK_API_KEY`. Node 22+.
 
 ---
 
-## What PULSE does and does not claim
+## Claims
 
-| Claim | Status |
+| | |
 | --- | --- |
-| Deterministic replay | Works without API keys |
-| Incident wall and SSE observer | Included |
-| Shared incident timeline | Included |
-| Span-level dangerous-command veto | Included (replay mid-line; live on available Fixer text) |
-| Kill-cam | Included |
-| Human Commander | Included |
-| Unit-tested veto detector | Included |
-| Three concurrent Mozaik `runLoop`s | Implemented in `src/mozaik-live.ts` |
-| Live output mapped by known participant id | Implemented |
-| Live mid-token interception | **Not claimed** |
-| Six independent LLMs at once | **Not claimed** |
-| Public hosted URL | **Not claimed** — localhost |
-
-Live Gemini streaming crashes this Mozaik build (`inference_streaming`). Replay is the visual mid-line veto. Live applies the same `findVeto` logic to available Fixer output.
-
----
-
-## How to judge quickly
-
-1. `npm install && npm run replay`
-2. Watch overlap, the dangerous command, and the veto pivot
-3. `npm test`
-4. Open `src/mozaik-live.ts` and search `runLoop`
-
----
-
-## Why this is a concurrency project
-
-Investigation, root-cause reasoning, remediation, and safety review should not wait for one another. The architecture makes that overlap visible. The bus makes the room observable. The detector makes intervention reliable. The Commander stays in the system.
-
-The goal is not to make agents talk. The goal is to make concurrent work change the outcome of an incident.
+| Replay wall, span veto, kill-cam, commander | Yes, no key |
+| `npm test` on `src/veto.ts` | Yes |
+| Three live `runLoop`s in `src/mozaik-live.ts` | Yes, if the model is allowlisted and has credit |
+| Live mid-token intercept | No |
+| Six LLMs at once | No |
+| Public host | No — localhost |
 
 ---
 
 ## Layout
 
-`src/mozaik-live.ts` live concurrent agents · `src/replay.ts` deterministic fixture · `src/veto.ts` detector · `src/load-env.ts` env · `ui/` wall · `PROJECT.md` spec · `MEMORY.md` handoff · `SUBMISSION.md` form copy.
+`src/mozaik-live.ts` · `src/replay.ts` · `src/veto.ts` · `src/load-env.ts` · `ui/` · `SUBMISSION.md`
