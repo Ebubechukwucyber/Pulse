@@ -173,12 +173,6 @@ function apply(ev, record) {
     for (const id of ev.payload.joined || []) roster.add(id);
     for (const id of ev.payload.left || []) roster.delete(id);
   }
-  if (ev.type === "LoopStarted") {
-    const role = ev.payload.role || ev.from;
-    addFact("start:" + role + ":" + ev.t_ms, "START " + role, "t_ms " + ev.t_ms + " (bus clock)");
-    ui.overlap.textContent = "start " + role + " @" + ev.t_ms + "ms";
-    ui.overlap.className = "yes";
-  }
   if (ev.type === "EvidenceFound") {
     addFact(`e:${ev.payload.path}:${ev.payload.quote}`, ev.payload.path, ev.payload.quote);
     if (ui.arch) {

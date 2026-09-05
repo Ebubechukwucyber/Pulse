@@ -2,7 +2,9 @@
  * Four Mozaik agents, one runtime.
  * Archaeologist / Hypothesis / Fixer runLoop on the same SEV1
  * without waiting. Identity is the id stored at join — not producerName.
- * streaming: false (this Mozaik build dies after inference_streaming + Gemini).
+ * Fixer requests streaming so veto can run on a partial draft.
+ * Arch/Hyp stay non-streaming. Server must not die if Mozaik
+ * throws after inference_streaming.
  */
 
 import {
@@ -38,6 +40,12 @@ class WhenAnyoneSpeaks extends SituationSpecification {
   }
 }
 
+class WhenStream extends SituationSpecification {
+  isSatisfiedBy({ event }) {
+    return event.type === "inference.stream";
+  }
+}
+
 function textOf(event) {
   const p = event.payload || {};
   return String(p.message ?? p.text ?? p.content ?? p.delta ?? "");
@@ -69,13 +77,40 @@ export async function startMozaikRoom() {
   const model = process.env.PULSE_MODEL_FAST || "gemini-3.5-flash";
   const byId = {};
 
-  const infer = (role, participant, message) => {
-    emit("LoopStarted", role, { role, model, t_ms: clock.now() });
-    runLoop(participant.getId(), String(message), {
-      model,
-      streaming: false,
-      context: participant.getMemory().getContext(),
-    });
+  const afterStream = {
+    isSatisfiedBy(transition) {
+      const next = transition && transition.nextStateId;
+      const from =
+        (transition && (transition.stateId || transition.currentStateId)) || "";
+      return from === "inference_streaming" || next == null || next === "";
+    },
+    async handle(transition) {
+      if (transition && transition.nextStateId) return transition;
+      return { ...transition, nextStateId: "model_message" };
+    },
+  };
+
+  const infer = (role, participant, message, streaming) => {
+    emit("LoopStarted", role, { role, model, t_ms: clock.now(), streaming: !!streaming });
+    try {
+      const pending = runLoop(
+        participant.getId(),
+        String(message),
+        {
+          model,
+          streaming: !!streaming,
+          context: participant.getMemory().getContext(),
+        },
+        streaming ? afterStream : undefined,
+      );
+      if (pending && typeof pending.catch === "function") {
+        pending.catch((err) => {
+          console.log("runLoop ended:", role, String(err?.message ?? err));
+        });
+      }
+    } catch (err) {
+      console.log("runLoop threw:", role, String(err?.message ?? err));
+    }
   };
 
   const scene =
@@ -95,7 +130,7 @@ export async function startMozaikRoom() {
         processor: {
           apply({ event, participant }) {
             if (!textOf(event).includes("SEV1")) return;
-            infer("archaeologist", participant, "Evidence only.\n" + scene);
+            infer("archaeologist", participant, "Evidence only.\n" + scene, false);
           },
         },
       },
@@ -113,7 +148,7 @@ export async function startMozaikRoom() {
         processor: {
           apply({ event, participant }) {
             if (!textOf(event).includes("SEV1")) return;
-            infer("hypothesis", participant, "Hypotheses only.\n" + scene);
+            infer("hypothesis", participant, "Hypotheses only.\n" + scene, false);
           },
         },
       },
@@ -133,7 +168,7 @@ export async function startMozaikRoom() {
           apply({ event, participant }) {
             const t = textOf(event);
             if (t.includes("SEV1") && !state.vetoed) {
-              infer("fixer", participant, "Propose mitigation now.\n" + scene);
+              infer("fixer", participant, "Propose mitigation now.\n" + scene, false);
               return;
             }
             if (t.startsWith("VETO") && state.vetoed && !state.pivoted) {
@@ -144,6 +179,7 @@ export async function startMozaikRoom() {
                 participant,
                 "VETO applied. Write a safe mitigation only: restore PG_POOL_SIZE=50 and bounce checkout-api canary. Do not delete pods cluster-wide.\n" +
                   scene,
+                false,
               );
             }
           },
@@ -166,6 +202,35 @@ export async function startMozaikRoom() {
     instruction: "Forward only. Never infer.",
     tools: [],
     handlers: [
+      {
+        specification: new WhenStream(),
+        processor: {
+          apply({ event }) {
+            const delta = String(
+              event.payload?.delta ?? event.payload?.data?.delta ?? event.payload?.text ?? "",
+            );
+            if (!delta) return;
+            state.draft += delta;
+            const draftId = state.pivoted ? "draft-2" : "draft-1";
+            emit("FixDraftDelta", "fixer", {
+              draftId,
+              delta,
+              fullSoFar: state.draft,
+            });
+            if (state.vetoed) return;
+            const hit = findVeto(state.draft, incident.forbiddenSpans);
+            if (!hit) return;
+            state.vetoed = true;
+            emit("VetoIssued", "redteam", {
+              draftId: "draft-1",
+              atChar: hit.atChar,
+              reason: hit.reason,
+              dangerousSpan: hit.dangerousSpan,
+            });
+            sendMessage("VETO: " + hit.reason + " — rewrite safe mitigation.", redTeam.getId());
+          },
+        },
+      },
       {
         specification: new WhenAnyoneSpeaks(),
         processor: {

@@ -8,6 +8,19 @@ Not a chatbot. Not a queue. The product is the overlap and the veto.
 
 Built for **JigJoy × daily.dev × Hyperskill — Build Systems of Concurrent Agents**.
 
+## Contents
+
+1. [Run it (no API key)](#run-it-no-api-key)
+2. [The problem](#the-problem)
+3. [How it is wired](#how-it-is-wired)
+4. [Roster](#roster)
+5. [The veto](#the-veto)
+6. [Why this is not a chatbot](#why-this-is-not-a-chatbot)
+7. [Proof of concurrency](#proof-of-concurrency)
+8. [Wall](#wall)
+9. [Live (optional)](#live-optional)
+10. [Layout](#layout)
+
 ---
 
 ## Run it (no API key)
@@ -154,19 +167,6 @@ npm run live
 `.env` next to `package.json`, never committed. Allowlisted names only: `gemini-3.5-flash`, `gemini-3.1-pro-preview`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.5`, `claude-haiku-4-5`, `claude-sonnet-4-6`, `claude-opus-4-7`, `claude-opus-4-8`, `deepseek-v4-flash`, `deepseek-v4-pro`.
 
 Groq / Llama / `gpt-4.1-mini` are rejected before HTTP. Ignore `MOZAIK_API_KEY`. Node 22+.
-
----
-
-## Claims
-
-| | |
-| --- | --- |
-| Replay wall, span veto, kill-cam, commander | Yes, no key |
-| `npm test` on `src/veto.ts` | Yes |
-| Three live `runLoop`s in `src/mozaik-live.ts` | Yes, if the model is allowlisted and has credit |
-| Live mid-token intercept | No |
-| Six LLMs at once | No |
-| Public host | No — localhost |
 
 ---
 

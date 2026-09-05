@@ -1,3 +1,4 @@
+import "./load-env.ts";
 import { createServer } from "node:http";
 import { readFileSync, existsSync } from "node:fs";
 import { extname, join, dirname } from "node:path";

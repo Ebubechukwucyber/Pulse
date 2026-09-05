@@ -14,7 +14,7 @@
 html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); }
 body {
   display: grid;
-  grid-template-rows: 56px 36px minmax(0, 1fr) minmax(160px, 26vh) 48px;
+  grid-template-rows: 56px 36px minmax(0, 1fr) minmax(140px, 24vh) 52px;
   overflow: hidden;
 }
 #clock, dd, .draft, #overlap, #status, .sev, .agents b {
@@ -129,13 +129,22 @@ h1 span { font-family: "IBM Plex Mono", monospace; letter-spacing: 0; text-trans
 .track em.red { background: var(--red); }
 footer.cmd {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto minmax(120px, 28%);
+  grid-template-columns: auto auto auto minmax(0, 1fr) auto minmax(220px, 32%);
   gap: 8px;
   align-items: center;
   padding: 0 16px;
   border-top: 1px solid var(--line);
   background: var(--raised);
   z-index: 3;
+}
+.cmd-label {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--amber);
+  padding-right: 10px;
+  border-right: 1px solid var(--line);
+  white-space: nowrap;
 }
 #cmd {
   background: transparent;
@@ -149,8 +158,8 @@ footer.cmd {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--mute);
-  font-size: 11px;
+  color: #e6e9ee;
+  font-size: 12px;
 }
 @media (max-width: 900px) {
   main { grid-template-columns: 1fr; }
