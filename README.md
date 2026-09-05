@@ -1,109 +1,122 @@
 # PULSE
 
-**The fixer does not get to finish a dangerous command. RedTeam cuts it while the tokens are still arriving.**
+**The fixer does not get to finish a dangerous command.**
 
-PULSE is a live incident command room. One SEV1 on `checkout-api` fans out to specialists who work on the same clock: search, hypotheses, a fix draft, a stream intercept, and a status line built only from facts that already landed. The human can join, type a directive, and leave. Work that was theirs is reassigned. Nobody waits in a queue.
+PULSE is an incident command room. `checkout-api` is in SEV1 after a deploy. Several specialists work on **one clock**. Three of them start a Mozaik `runLoop` without waiting for each other. RedTeam can veto a cluster-wide delete so Fixer has to pivot. You are Commander: join, type one order, leave.
 
-**Judge it in 90 seconds ↗** · **Run locally ↗** · **What is real ↗** · **Why this is not a chatbot ↗**
+Not a chatbot. The product is the overlap and the veto.
 
-Built for **JigJoy × daily.dev × Hyperskill — Build Systems of Concurrent Agents**, 5–6 Sep 2026.
-
----
-
-## Proof of concurrency
-
-File: `src/mozaik-live.ts`.
-
-On one commander SEV1, Archaeologist, Hypothesis and Fixer each call `runLoop` **without waiting for the others**. Each start emits `LoopStarted` on the shared bus with `t_ms`. The overlap lanes and Facts rail render those events. They are not CSS delays.
-
-```
-infer("archaeologist", ...)  // LoopStarted then runLoop
-infer("hypothesis", ...)
-infer("fixer", ...)
-```
-
-Identity for live output is `participant.getId()` stored at `join`, not `producerName`.
-
-Wall mapping:
-
-- Archaeologist → `EvidenceFound`
-- Hypothesis → `HypothesisPosted`
-- Fixer → `FixDraftDelta` / `FixDraftFinal`
-- `findVeto` → `VetoIssued` → commander-shaped `VETO` message → Fixer `FixPivoted` and a second safe `runLoop`
-
-`npm run replay` is the no-key proof of the same wall. `npm run live` is the Mozaik `runLoop` proof (`gemini-3.5-flash` unless `PULSE_MODEL_FAST` is set).
-
-Grep: `runLoop` and `LoopStarted` in `src/mozaik-live.ts`.
-
-**Six panels is not six model calls.** Sentry and Triage are the incident header (fixture events). Archaeologist, Hypothesis and Fixer are the three concurrent `runLoop`s. RedTeam is on the same runtime and vetoes the draft; it is not a fourth billed loop unless a pivot runs. Commander is the labeled human bar at the bottom.
+JigJoy x daily.dev x Hyperskill — concurrent agents, 5-6 Sep 2026.
 
 ---
 
-## Judge it in 90 seconds
+## In one minute
+
+A real war room at 3am: one person greps logs, one argues the cause, one types `kubectl`, one says do not wipe prod. Today that is Slack and a risky paste. PULSE is that room with agents that do not take turns.
+
+| Who | Job |
+| --- | --- |
+| Sentry | Raises the alarm |
+| Triage | Sets SEV1 |
+| Archaeologist | Pulls log and repo evidence |
+| Hypothesis | States competing causes |
+| Fixer | Writes the mitigation |
+| RedTeam | Cuts a dangerous command |
+| Comms / Facts | Only repeats what already landed |
+| Commander | You |
+
+**Contest claim:** three concurrent `runLoop`s (Archaeologist, Hypothesis, Fixer) on one runtime, plus RedTeam, plus a human. Six panels on the wall are **not** six paid models.
+
+---
+
+## Run the demo (no API key)
 
 ```bash
-git clone https://github.com/YOUR_USER/pulse.git
-cd pulse
+npm install
 npm run replay
 ```
 
-Open [http://localhost:8787](http://localhost:8787). Do not click around first. Watch.
+Open http://localhost:8787. Hard-refresh. Watch before you click.
 
-| Clock | What must be true on the wall |
+| When | You should see |
 | --- | --- |
-| ~0s | `checkout-api` declared. Error / p99 / deploy age come from the fixture, not decoration. |
-| ~2s | Archaeologist and Hypothesis emit close enough that both ticks are hot. |
-| ~4s | Fixer starts typing `kubectl delete pod checkout-api --all`. |
-| mid-line | RedTeam veto. Only that span is struck through. The rest of the draft stays. |
-| after | Pivot to restore `PG_POOL_SIZE=50` and bounce the canary only. |
-| end | Commander joins, sends one line, leaves. Open work is handed off. |
+| 0s | Header: checkout-api, error %, p99, deploy age |
+| ~2s | Sentry + Triage text. Archaeologist and Hypothesis both hot |
+| ~4s | Fixer types `kubectl delete pod checkout-api --all` |
+| mid-line | Only that span goes red and is struck through |
+| after | Safer fix: restore `PG_POOL_SIZE=50`, bounce canary |
+| you | Commander bar: Join, type, Send, Leave |
 
-Then press **Kill-cam**. It replays the three seconds before the veto from the event log. That is the shot.
+**Kill-cam** / `K` replays the seconds around the veto. `R` restarts. `npm test` must stay green.
 
-`R` replays the fixture. `K` is kill-cam.
+---
 
-```bash
-npm test
-```
+## The wall (what each label is)
 
-Veto patterns are unit-tested. If this test is red, the demo is lying.
+**Header** — service name, SEV1, **error** (failing request %), **p99** (slow tail latency), **deploy** (minutes since release), **clock** (time in this incident). Replay and Kill-cam buttons.
+
+**Tick row** — a name lights when that participant just emitted an event.
+
+**Sentry** — raw alarm and log lines (`IncidentDeclared`).
+
+**Triage** — severity and why (`SeveritySet`).
+
+**Archaeologist** — quoted evidence (`EvidenceFound`).
+
+**Hypothesis** — the working theory (`HypothesisPosted`).
+
+**Fixer** — the draft command (`FixDraftDelta`). Dangerous span is marked, not the whole paragraph.
+
+**RedTeam** — veto reason and the span it cut (`VetoIssued`).
+
+**Facts / Comms** — right column. Only events that already happened, including `LoopStarted` times.
+
+**Overlap** — swimlane from bus timestamps. Two bars stacked = they worked at the same time.
+
+**Commander** — bottom bar. Human participant. Status text on the **right** is the last bus event (`VetoIssued ← redteam`), not a second page.
 
 ---
 
 ## The problem
 
-Incident tools still run as a pipeline: search, then guess, then patch, then review. Review happens after the command exists. That is how a model writes `kubectl delete … --all` and nobody is listening until the paragraph is done.
+Most "multi-agent" demos are a pipeline: search, then guess, then patch, then review. Review starts after the command exists. That is how `kubectl delete … --all` gets written with nobody listening.
 
-Mozaik is not interesting if you put six labels on a sequential bot. It is interesting if one participant can stop another **during generation**, if two streams occupy the same millisecond, and if a human can walk in and out without freezing the room.
-
----
-
-## What I built
-
-A war-room observer plus a deterministic replay bus.
-
-- Shared event log. Every panel reads the same events. Nothing is invented in the UI.
-- Specialists as participants, not chat turns: Sentry, Triage, Archaeologist, Hypothesis, Fixer, RedTeam, Comms, Commander.
-- RedTeam is a stream intercept. It scores the draft as characters arrive and fires `VetoIssued` at `atChar`.
-- Commander bar is on the bus: Join / Leave / Send emit `RosterChanged` and `HumanDirective`.
-- Swimlane is timestamps from the bus, merged into blocks. Overlap is visible with the sound off.
-
-The product is the veto, not the theme.
+Mozaik only matters if two loops occupy the same millisecond and one participant can change the outcome of another.
 
 ---
 
 ## Why this is not a chatbot
 
-A renamed chat app has one completion, then the next. PULSE fails that test on purpose.
-
-| If it were a pipeline | What PULSE does instead |
+| If it were a pipeline | What PULSE does |
 | --- | --- |
-| Search finishes, then a hypothesis starts | Both subscribe to `IncidentDeclared` and emit on their own clocks |
-| A reviewer reads the finished command | RedTeam listens to `FixDraftDelta` and cuts mid-string |
-| Status is a canned paragraph | Comms may only cite facts already on the bus |
-| Human is a system prompt | Human is a participant who can join and leave |
+| Search finishes, then a guess starts | Archaeologist and Hypothesis `runLoop` on the same SEV1 |
+| A reviewer reads the finished command | RedTeam is already on the runtime and can veto |
+| Status is a canned paragraph | Facts only show events that landed |
+| Human is a system prompt | Human is `createHuman`: join, send, leave |
 
-If two agent ticks are never hot at the same time, the build is wrong. If the whole Fixer paragraph goes red instead of the dangerous span, the build is wrong.
+If two ticks are never hot together, the build is wrong. If the whole Fixer paragraph goes red, the build is wrong.
+
+---
+
+## Proof of concurrency
+
+Grep `src/mozaik-live.ts`.
+
+On one commander SEV1, three calls fire **without waiting**:
+
+```
+infer("archaeologist", ...)   // LoopStarted, then runLoop
+infer("hypothesis", ...)
+infer("fixer", ...)
+```
+
+`LoopStarted` carries shared `t_ms`. The Facts rail and overlap lanes render those events. Not CSS delays.
+
+Live output is mapped by `participant.getId()` stored at `join`, not by `producerName`.
+
+```
+FixDraftFinal → findVeto() → VetoIssued → VETO message → FixPivoted → safe runLoop
+```
 
 ---
 
@@ -111,68 +124,51 @@ If two agent ticks are never hot at the same time, the build is wrong. If the wh
 
 | Claim | Status |
 | --- | --- |
-| Replay fixture, veto, swimlane, kill-cam, commander bar | Working now. No API key. No npm dependencies. Node 22+. |
-| Dangerous-command detector (`src/veto.ts`) | Working. Covered by `npm test`. |
-| Event contract (`src/events.ts`) | Frozen. UI may not invent fields. |
-| Live Mozaik inference (`npm run live`) | Stub. `src/live.ts` is the next wiring. Do not demo live as if models are talking yet. |
-| Hosted public URL | Not claimed here. Run local. |
-
-Same rule damishafe uses: the contest verification bar and the product flow are the same flow. Replay is not a cartoon of a future demo. It is the demo until live is wired.
-
----
-
-## Architecture
-
-```
-fixture or live agents
-        │
-        ▼
-   event bus (SSE)
-        │
-        ├── Fixer draft
-        ├── RedTeam intercept  ── veto at atChar
-        ├── Facts rail
-        ├── Overlap swimlane
-        └── Commander join / leave / directive
-```
-
-Clock is shared. `t_ms` is elapsed from incident start. Kill-cam slices the in-memory log. It does not fabricate a second timeline.
+| Replay wall, span veto, swimlane, kill-cam, commander | Works. No key. |
+| `src/veto.ts` | Works. `npm test`. |
+| Live `@mozaik-ai/core` three `runLoop`s | Works with an allowlisted model that has credit. |
+| Mid-token intercept on **live** Gemini | Not claimed. Streaming crashes this Mozaik build. Replay still shows mid-line veto. |
+| Public host | Not claimed. Localhost. |
+| Six models at once | False. |
 
 ---
 
-## Project layout
-
-```
-PROJECT.md          frozen spec — other LLMs start here
-MEMORY.md           session handoff
-src/events.ts       bus contract
-src/veto.ts         dangerous span detector
-src/replay.ts       checkout SEV1 fixture
-src/bus.ts          in-process + SSE
-src/server.ts       static UI + /events + /api/*
-src/live.ts         Mozaik stub
-ui/                 war-room observer
-fixtures/incidents/ seeded payloads
-```
-
----
-
-## Run locally
-
-Node 22 or newer.
+## Live mode (optional, needs a key)
 
 ```bash
-npm run replay          # http://localhost:8787
-npm test                # veto detector
+npm install @mozaik-ai/core
 ```
 
-`npm run live` prints the stub status. It will not call a model until `src/live.ts` is implemented against `@mozaik-ai/core`.
+`.env` next to `package.json` (do not commit):
+
+```
+GEMINI_API_KEY=
+PULSE_MODEL_FAST=gemini-3.5-flash
+PULSE_PORT=8787
+```
+
+Or PowerShell:
+
+```powershell
+$env:GEMINI_API_KEY="your-key"
+$env:PULSE_MODEL_FAST="gemini-3.5-flash"
+npm run live
+```
+
+This package only accepts: `gemini-3.5-flash`, `gemini-3.1-pro-preview`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.5`, `claude-haiku-4-5`, `claude-sonnet-4-6`, `claude-opus-4-7`, `claude-opus-4-8`, `deepseek-v4-flash`, `deepseek-v4-pro`.
+
+Groq / Llama / `gpt-4.1-mini` fail before any HTTP call. Ignore `MOZAIK_API_KEY` (telemetry). Live uses `streaming: false`.
+
+Need **Node 22+**. No constructor parameter properties (strip-only mode).
 
 ---
 
-## Docs for the next session
+## Why this should win
 
-- `PROJECT.md` — do not contradict it.
-- `MEMORY.md` — append what you changed.
+The brief already names a live ops room. Concurrency is grepable. Replay needs no key. The veto is an SRE instinct, not a debate club. The README does not pretend six panels are six models.
 
-If you are an LLM continuing this repo: do not replace the veto with a chatbot, do not invent metrics in the UI, and do not mark live mode as done until overlapping token streams are visible on the wall.
+---
+
+## Layout
+
+`PROJECT.md` spec · `MEMORY.md` handoff · `SUBMISSION.md` form paste · `src/mozaik-live.ts` weekend substance · `src/replay.ts` fixture · `src/veto.ts` detector · `ui/` wall.
