@@ -1,12 +1,8 @@
 /**
- * Weekend substance — Mozaik v4.
- * Two agents on one runtime. Fixer runLoop streams. RedTeam
- * listens to inference.stream and steers the loop to idle on veto.
- *
- * Requires: npm install @mozaik-ai/core
- *           a provider key in .env
- *
- * Replay stays as the no-key backup.
+ * Four Mozaik agents, one runtime.
+ * Archaeologist / Hypothesis / Fixer runLoop on the same SEV1
+ * without waiting. Identity is the id stored at join — not producerName.
+ * streaming: false (this Mozaik build dies after inference_streaming + Gemini).
  */
 
 import {
@@ -24,51 +20,42 @@ import { findVeto } from "./veto.ts";
 class PulseState extends RuntimeState {
   draft = "";
   vetoed = false;
+  pivoted = false;
 }
 
 const runtime = defineRuntime();
 const { initializeRuntime, join, sendMessage, runLoop } = runtime;
 
-class WhenStreamChunk extends SituationSpecification {
-  isSatisfiedBy({ event }) {
-    return event.type === "inference.stream";
-  }
-}
-
-class WhenMessage extends SituationSpecification {
+class WhenOthersSpeak extends SituationSpecification {
   isSatisfiedBy({ event, participant }) {
     return event.type === "message.sent" && event.producerId !== participant.getId();
   }
 }
 
-function emitDelta(full, delta, draftId) {
-  bus.emit({
-    id: uid(),
-    t_ms: clock.now(),
-    type: "FixDraftDelta",
-    from: "fixer",
-    payload: { draftId, delta, fullSoFar: full },
-  });
+class WhenAnyoneSpeaks extends SituationSpecification {
+  isSatisfiedBy({ event }) {
+    return event.type === "message.sent";
+  }
 }
 
-function emitVeto(hit, draftId) {
+function textOf(event) {
+  const p = event.payload || {};
+  return String(p.message ?? p.text ?? p.content ?? p.delta ?? "");
+}
+
+function emit(type, from, payload) {
   bus.emit({
     id: uid(),
     t_ms: clock.now(),
-    type: "VetoIssued",
-    from: "redteam",
-    to: "fixer",
-    payload: {
-      draftId,
-      atChar: hit.atChar,
-      reason: hit.reason,
-      dangerousSpan: hit.dangerousSpan,
-    },
+    type,
+    from,
+    to: "broadcast",
+    payload,
   });
 }
 
 export function liveStatus() {
-  return "Mozaik v4 live: Fixer runLoop + RedTeam inference.stream intercept.";
+  return "Mozaik v4: three runLoops start on one SEV1; RedTeam veto can force a fixer pivot.";
 }
 
 export async function startMozaikRoom() {
@@ -79,29 +66,54 @@ export async function startMozaikRoom() {
   const state = new PulseState();
   initializeRuntime({ state });
 
-  const model = process.env.PULSE_MODEL_FAST || "gpt-4.1-mini";
+  const model = process.env.PULSE_MODEL_FAST || "gemini-3.5-flash";
+  const byId = {};
 
-  const redTeam = createAgent({
-    name: "redteam",
+  const infer = (role, participant, message) => {
+    emit("LoopStarted", role, { role, model, t_ms: clock.now() });
+    runLoop(participant.getId(), String(message), {
+      model,
+      streaming: false,
+      context: participant.getMemory().getContext(),
+    });
+  };
+
+  const scene =
+    `SEV1 ${incident.service}. ${incident.symptom}. ` +
+    `Deploy ${incident.tag}, age ${incident.deployAgeMin}m. ` +
+    `Logs:\n${incident.rawLines.join("\n")}\n` +
+    `Repo:\n${incident.repoSnippets.map((s) => s.path + ": " + s.quote).join("\n")}`;
+
+  const archaeologist = createAgent({
+    name: "archaeologist",
     capabilities: ["inference"],
-    instruction: "You intercept dangerous live mitigations. You do not write the fix.",
+    instruction: "Extract evidence only. Quote log and repo lines. No kubectl. Max 4 bullets.",
     tools: [],
     handlers: [
       {
-        specification: new WhenStreamChunk(),
+        specification: new WhenOthersSpeak(),
         processor: {
-          apply({ event }) {
-            const delta = String(
-              event.payload?.delta ?? event.payload?.data?.delta ?? "",
-            );
-            if (!delta) return;
-            state.draft += delta;
-            emitDelta(state.draft, delta, state.vetoed ? "draft-2" : "draft-1");
-            if (state.vetoed) return;
-            const hit = findVeto(state.draft, incident.forbiddenSpans);
-            if (!hit) return;
-            state.vetoed = true;
-            emitVeto(hit, "draft-1");
+          apply({ event, participant }) {
+            if (!textOf(event).includes("SEV1")) return;
+            infer("archaeologist", participant, "Evidence only.\n" + scene);
+          },
+        },
+      },
+    ],
+  });
+
+  const hypothesis = createAgent({
+    name: "hypothesis",
+    capabilities: ["inference"],
+    instruction: "Competing hypotheses only. Strongest first. No kubectl. 3 lines.",
+    tools: [],
+    handlers: [
+      {
+        specification: new WhenOthersSpeak(),
+        processor: {
+          apply({ event, participant }) {
+            if (!textOf(event).includes("SEV1")) return;
+            infer("hypothesis", participant, "Hypotheses only.\n" + scene);
           },
         },
       },
@@ -112,27 +124,90 @@ export async function startMozaikRoom() {
     name: "fixer",
     capabilities: ["inference"],
     instruction:
-      "You propose a checkout-api mitigation. Prefer restoring PG_POOL_SIZE=50. Never delete a whole cluster. If you mention kubectl, RedTeam will stop you.",
+      "One checkout-api mitigation. Prefer PG_POOL_SIZE=50 and canary bounce. One paragraph.",
     tools: [],
     handlers: [
       {
-        specification: new WhenMessage(),
+        specification: new WhenOthersSpeak(),
         processor: {
           apply({ event, participant }) {
-            const { message } = event.payload;
-            runLoop(
-              participant.getId(),
-              String(message),
-              { model, streaming: true, context: participant.getMemory().getContext() },
-              {
-                isSatisfiedBy(transition) {
-                  return state.vetoed && transition.nextStateId !== "idle";
-                },
-                async handle(transition) {
-                  return { ...transition, nextStateId: "idle" };
-                },
-              },
-            );
+            const t = textOf(event);
+            if (t.includes("SEV1") && !state.vetoed) {
+              infer("fixer", participant, "Propose mitigation now.\n" + scene);
+              return;
+            }
+            if (t.startsWith("VETO") && state.vetoed && !state.pivoted) {
+              state.pivoted = true;
+              emit("FixPivoted", "fixer", { from: "draft-1", to: "draft-2", reason: "veto" });
+              infer(
+                "fixer",
+                participant,
+                "VETO applied. Write a safe mitigation only: restore PG_POOL_SIZE=50 and bounce checkout-api canary. Do not delete pods cluster-wide.\n" +
+                  scene,
+              );
+            }
+          },
+        },
+      },
+    ],
+  });
+
+  const redTeam = createAgent({
+    name: "redteam",
+    capabilities: ["inference"],
+    instruction: "Judge mitigations only. VETO or ALLOW.",
+    tools: [],
+    handlers: [],
+  });
+
+  const wall = createAgent({
+    name: "wall",
+    capabilities: [],
+    instruction: "Forward only. Never infer.",
+    tools: [],
+    handlers: [
+      {
+        specification: new WhenAnyoneSpeaks(),
+        processor: {
+          apply({ event }) {
+            const t = textOf(event);
+            if (!t) return;
+            const role = byId[event.producerId];
+            if (role === "archaeologist") {
+              emit("EvidenceFound", "archaeologist", {
+                kind: "live",
+                quote: t.slice(0, 400),
+                path: "live/archaeologist",
+                confidence: 0.7,
+              });
+            }
+            if (role === "hypothesis") {
+              emit("HypothesisPosted", "hypothesis", {
+                hid: "h-live",
+                title: "live",
+                claim: t.slice(0, 400),
+                confidence: 0.6,
+              });
+            }
+            if (role === "fixer") {
+              const draftId = state.pivoted ? "draft-2" : "draft-1";
+              state.draft = t;
+              emit("FixDraftDelta", "fixer", { draftId, delta: t, fullSoFar: t });
+              emit("FixDraftFinal", "fixer", { draftId, text: t, kind: "live" });
+              if (!state.vetoed) {
+                const hit = findVeto(t, incident.forbiddenSpans);
+                if (hit) {
+                  state.vetoed = true;
+                  emit("VetoIssued", "redteam", {
+                    draftId: "draft-1",
+                    atChar: hit.atChar,
+                    reason: hit.reason,
+                    dangerousSpan: hit.dangerousSpan,
+                  });
+                  sendMessage("VETO: " + hit.reason + " — rewrite safe mitigation.", redTeam.getId());
+                }
+              }
+            }
           },
         },
       },
@@ -141,42 +216,37 @@ export async function startMozaikRoom() {
 
   const commander = createHuman({ name: "commander", capabilities: [], handlers: [] });
 
-  join(redTeam);
+  join(wall);
+  join(archaeologist);
+  join(hypothesis);
   join(fixer);
+  join(redTeam);
   join(commander);
 
-  bus.emit({
-    id: uid(),
-    t_ms: clock.now(),
-    type: "IncidentDeclared",
-    from: "sentry",
-    payload: {
-      id: incident.id,
-      service: incident.service,
-      symptom: incident.symptom,
-      errorRate: incident.errorRate,
-      p99ms: incident.p99ms,
-      deployAgeMin: incident.deployAgeMin,
-      rawLines: incident.rawLines,
-    },
+  byId[archaeologist.getId()] = "archaeologist";
+  byId[hypothesis.getId()] = "hypothesis";
+  byId[fixer.getId()] = "fixer";
+  byId[redTeam.getId()] = "redteam";
+  byId[commander.getId()] = "commander";
+
+  emit("IncidentDeclared", "sentry", {
+    id: incident.id,
+    service: incident.service,
+    symptom: incident.symptom,
+    errorRate: incident.errorRate,
+    p99ms: incident.p99ms,
+    deployAgeMin: incident.deployAgeMin,
+    rawLines: incident.rawLines,
   });
-  bus.emit({
-    id: uid(),
-    t_ms: clock.now(),
-    type: "SeveritySet",
-    from: "triage",
-    payload: { sev: "SEV1", reason: "checkout error rate 18% within 14m of deploy" },
+  emit("SeveritySet", "triage", {
+    sev: "SEV1",
+    reason: "checkout error rate 18% within 14m of deploy",
   });
-  bus.emit({
-    id: uid(),
-    t_ms: clock.now(),
-    type: "RosterChanged",
-    from: "triage",
-    payload: { joined: ["fixer", "redteam", "commander"], left: [], reason: "mozaik join" },
+  emit("RosterChanged", "triage", {
+    joined: ["archaeologist", "hypothesis", "fixer", "redteam", "commander"],
+    left: [],
+    reason: "four-agent mozaik join",
   });
 
-  sendMessage(
-    `SEV1 ${incident.service}: ${incident.symptom}. Deploy ${incident.tag}. Propose mitigation now.`,
-    commander.getId(),
-  );
+  sendMessage(scene, commander.getId());
 }

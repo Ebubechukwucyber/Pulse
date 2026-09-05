@@ -10,6 +10,33 @@ Built for **JigJoy × daily.dev × Hyperskill — Build Systems of Concurrent Ag
 
 ---
 
+## Proof of concurrency
+
+File: `src/mozaik-live.ts`.
+
+On one commander SEV1, Archaeologist, Hypothesis and Fixer each call `runLoop` **without waiting for the others**. Each start emits `LoopStarted` on the shared bus with `t_ms`. The overlap lanes and Facts rail render those events. They are not CSS delays.
+
+```
+infer("archaeologist", ...)  // LoopStarted then runLoop
+infer("hypothesis", ...)
+infer("fixer", ...)
+```
+
+Identity for live output is `participant.getId()` stored at `join`, not `producerName`.
+
+Wall mapping:
+
+- Archaeologist → `EvidenceFound`
+- Hypothesis → `HypothesisPosted`
+- Fixer → `FixDraftDelta` / `FixDraftFinal`
+- `findVeto` → `VetoIssued` → commander-shaped `VETO` message → Fixer `FixPivoted` and a second safe `runLoop`
+
+`npm run replay` is the no-key proof of the same wall. `npm run live` is the Mozaik `runLoop` proof (`gemini-3.5-flash` unless `PULSE_MODEL_FAST` is set).
+
+Grep: `runLoop` and `LoopStarted` in `src/mozaik-live.ts`.
+
+---
+
 ## Judge it in 90 seconds
 
 ```bash

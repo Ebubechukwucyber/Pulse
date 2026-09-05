@@ -9,6 +9,14 @@ const ui = {
   dep: $("m-dep"),
   clock: $("clock"),
   agents: $("agents"),
+  sentry: $("sentry"),
+  sentryState: $("sentry-state"),
+  triage: $("triage"),
+  triageState: $("triage-state"),
+  arch: $("arch"),
+  archState: $("arch-state"),
+  hyp: $("hyp"),
+  hypState: $("hyp-state"),
   fixer: $("fixer"),
   fixerState: $("fixer-state"),
   red: $("red-draft"),
@@ -147,18 +155,36 @@ function apply(ev, record) {
     ui.err.textContent = `${p.errorRate}%`;
     ui.p99.textContent = `${p.p99ms}ms`;
     ui.dep.textContent = `${p.deployAgeMin}m`;
+    if (ui.sentry) {
+      ui.sentry.textContent = [p.service, p.symptom, ...(p.rawLines || [])].join("\n");
+      ui.sentryState.textContent = "firing";
+    }
   }
   if (ev.type === "SeveritySet") {
     ui.sev.textContent = ev.payload.sev;
     ui.sev.className = `sev ${ev.payload.sev}`;
     ui.brief.textContent = ev.payload.reason;
+    if (ui.triage) {
+      ui.triage.textContent = ev.payload.sev + "\n" + ev.payload.reason;
+      ui.triageState.textContent = "set";
+    }
   }
   if (ev.type === "RosterChanged") {
     for (const id of ev.payload.joined || []) roster.add(id);
     for (const id of ev.payload.left || []) roster.delete(id);
   }
+  if (ev.type === "LoopStarted") {
+    const role = ev.payload.role || ev.from;
+    addFact("start:" + role + ":" + ev.t_ms, "START " + role, "t_ms " + ev.t_ms + " (bus clock)");
+    ui.overlap.textContent = "start " + role + " @" + ev.t_ms + "ms";
+    ui.overlap.className = "yes";
+  }
   if (ev.type === "EvidenceFound") {
     addFact(`e:${ev.payload.path}:${ev.payload.quote}`, ev.payload.path, ev.payload.quote);
+    if (ui.arch) {
+      ui.arch.textContent = (ui.arch.textContent ? ui.arch.textContent + "\n\n" : "") + ev.payload.quote;
+      ui.archState.textContent = "live";
+    }
   }
   if (ev.type === "HypothesisPosted") {
     addFact(
@@ -166,6 +192,10 @@ function apply(ev, record) {
       `${ev.payload.hid}  ${Math.round((ev.payload.confidence || 0) * 100)}%`,
       ev.payload.claim || ev.payload.title
     );
+    if (ui.hyp) {
+      ui.hyp.textContent = ev.payload.claim || ev.payload.title || "";
+      ui.hypState.textContent = "live";
+    }
   }
   if (ev.type === "FixDraftDelta") {
     fixerText = ev.payload.fullSoFar;
@@ -217,6 +247,14 @@ function resetView() {
   roster.add("triage");
   ui.fixer.textContent = "";
   ui.red.textContent = "";
+  if (ui.arch) {
+    ui.arch.textContent = "";
+    ui.archState.textContent = "idle";
+  }
+  if (ui.hyp) {
+    ui.hyp.textContent = "";
+    ui.hypState.textContent = "idle";
+  }
   ui.facts.innerHTML = "";
   ui.fixerState.textContent = "idle";
   ui.redState.textContent = "watching";

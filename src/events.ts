@@ -24,7 +24,8 @@ export type BusEventType =
   | "HumanDirective"
   | "ParticipantLeftWork"
   | "IncidentMitigated"
-  | "AgentError";
+  | "AgentError"
+  | "LoopStarted";
 
 export interface BusEvent<T = unknown> {
   id: string;
