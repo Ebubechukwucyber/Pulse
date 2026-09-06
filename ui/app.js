@@ -282,6 +282,7 @@ function resetView() {
   playing = true;
   window.__pulseDraft = "";
   window.__pulseVeto = null;
+  window.__pulseFreeze = false;
 }
 
 function ingest(events) {
@@ -294,6 +295,7 @@ function ingest(events) {
 }
 
 function pullSnapshot() {
+  if (!playing) return Promise.resolve();
   return fetch("/api/snapshot")
     .then((r) => r.json())
     .then((events) => {
@@ -328,21 +330,23 @@ function replayServer() {
   fetch("/api/replay", { method: "POST" });
 }
 
-function killCam() {
-  const hit = [...log].reverse().find((e) => e.type === "VetoIssued");
+function runKillCam(events) {
+  const hit = [...events].reverse().find((e) => e.type === "VetoIssued");
   if (!hit) {
     ui.status.textContent = "no veto in this run yet";
     return;
   }
   const from = Math.max(0, hit.t_ms - 3000);
   const until = hit.t_ms + 1500;
-  const slice = log.filter((e) => e.t_ms >= from && e.t_ms <= until);
+  const slice = events.filter((e) => e.t_ms >= from && e.t_ms <= until);
   playing = false;
+  window.__pulseFreeze = true;
   origin = Date.now() - from;
   ui.fixer.textContent = "";
   ui.red.textContent = "";
   ui.facts.innerHTML = "";
   factsSeen.clear();
+  seenIds.clear();
   fixerText = "";
   veto = null;
   Object.keys(stamps).forEach((k) => delete stamps[k]);
@@ -354,6 +358,20 @@ function killCam() {
     const id = setTimeout(() => apply(ev, false), delay);
     killCamTimer.push(id);
   });
+}
+
+function killCam() {
+  const local = log.filter((e) => e && e.type);
+  if (local.some((e) => e.type === "VetoIssued")) {
+    runKillCam(local);
+    return;
+  }
+  fetch("/api/snapshot")
+    .then((r) => r.json())
+    .then((events) => runKillCam(Array.isArray(events) ? events : []))
+    .catch(() => {
+      ui.status.textContent = "no veto in this run yet";
+    });
 }
 
 $("replay").onclick = replayServer;
